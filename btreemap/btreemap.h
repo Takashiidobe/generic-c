@@ -1,3 +1,4 @@
+// sorted_map.h
 #ifndef SORTED_MAP_H
 #define SORTED_MAP_H
 
@@ -7,107 +8,143 @@
 #include <stdlib.h>
 #include <string.h>
 
-// ─── Internal header for dynamic storage ───────────────────────────────────
-typedef struct SMapHeader {
+// —— internal header: length, capacity, and raw data array ——
+typedef struct {
   size_t len, cap;
-  char data[]; // flexible-array of Pair<K,V>
+  char data[]; // floor(cap) slots of [ key_bytes | val_bytes ]
 } SMapHeader;
-#define _sm_header(m)                                                          \
-  ((SMapHeader *)(((char *)(m)) - offsetof(SMapHeader, data)))
 
-// ─── Pair type and map alias ──────────────────────────────────────────────
-#define Pair(K, V)                                                             \
+// —— declare a sorted‐map variable for key type K and value type V ——
+#define SortedMap(K, V)                                                        \
   struct {                                                                     \
-    K key;                                                                     \
-    V val;                                                                     \
+    SMapHeader *h;                                                             \
+    K _key;                                                                    \
+    V _val;                                                                    \
   }
-#define SortedMap(K, V) Pair(K, V) *
 
-// ─── length, capacity, and free ──────────────────────────────────────────
-#define sm_len(m) ((m) ? _sm_header(m)->len : 0)
-#define sm_cap(m) ((m) ? _sm_header(m)->cap : 0)
-#define sm_free(m)                                                             \
+// —— helpers ——
+// number of elements
+#define sm_len(m) ((m).h ? (m).h->len : 0)
+// storage stride = sizeof(key)+sizeof(val)
+#define _sm_stride(m) (sizeof((m)._key) + sizeof((m)._val))
+// raw byte pointer
+#define _sm_data(m) ((char *)(m).h->data)
+// pointer to key slot i
+#define _sm_keyptr(m, i)                                                       \
+  ((typeof((m)._key) *)(_sm_data(m) + (i) * _sm_stride(m)))
+// pointer to val slot i
+#define _sm_valptr(m, i)                                                       \
+  ((typeof((m)._val) *)(_sm_data(m) + (i) * _sm_stride(m) + sizeof((m)._key)))
+
+// —— initialize & free ——
+#define sorted_map_init(m, init_cap)                                           \
   do {                                                                         \
-    if (m) {                                                                   \
-      free(_sm_header(m));                                                     \
-      (m) = NULL;                                                              \
+    size_t __stride = _sm_stride(m);                                           \
+    size_t __hdr = offsetof(SMapHeader, data);                                 \
+    (m).h = malloc(__hdr + __stride * (init_cap));                             \
+    assert((m).h);                                                             \
+    (m).h->len = 0;                                                            \
+    (m).h->cap = (init_cap);                                                   \
+  } while (0)
+
+#define sorted_map_free(m)                                                     \
+  do {                                                                         \
+    if ((m).h) {                                                               \
+      free((m).h);                                                             \
+      (m).h = NULL;                                                            \
     }                                                                          \
   } while (0)
 
-// ─── Internal grow routine ───────────────────────────────────────────────
-static inline void _sm_grow(void **arr, size_t needed, size_t elem_size) {
-  SMapHeader *h = *arr ? _sm_header(*arr) : NULL;
-  size_t old_len = h ? h->len : 0;
-  size_t new_len = old_len + needed;
-  size_t cap = h ? h->cap : 0;
-
-  if (new_len > cap) {
-    size_t dbl = cap ? cap * 2 : 1;
-    size_t new_cap = dbl > new_len ? dbl : new_len;
-    size_t hdr_sz = offsetof(SMapHeader, data);
-
-    if (h) {
-      h = realloc(h, hdr_sz + new_cap * elem_size);
-      assert(h);
-    } else {
-      h = malloc(hdr_sz + new_cap * elem_size);
-      assert(h);
-      h->len = 0;
-    }
-    h->cap = new_cap;
-  }
-  h->len = new_len;
-  *arr = h->data;
-}
-
-// ─── insert or update, keeping keys sorted ────────────────────────────────
-#define sorted_map_put(m, K, V, KEY, VAL)                                      \
+// —— grow capacity when full ——
+#define _sm_ensure(m)                                                          \
   do {                                                                         \
-    __typeof__(*(m)) _p = {.key = (KEY), .val = (VAL)};                        \
-    size_t _n = sm_len(m), _lo = 0, _hi = _n;                                  \
-    bool _replaced = false;                                                    \
+    SMapHeader *__sh = (m).h;                                                  \
+    if (__sh->len >= __sh->cap) {                                              \
+      size_t __newc = __sh->cap ? __sh->cap * 2 : 1;                           \
+      size_t __stride = _sm_stride(m);                                         \
+      size_t __hdr = offsetof(SMapHeader, data);                               \
+      __sh = realloc(__sh, __hdr + __stride * __newc);                         \
+      assert(__sh);                                                            \
+      __sh->cap = __newc;                                                      \
+      (m).h = __sh;                                                            \
+    }                                                                          \
+  } while (0)
+
+// —— insert or overwrite ——
+#define sorted_map_put(m, key_expr, val_expr)                                  \
+  do {                                                                         \
+    if (!(m).h)                                                                \
+      sorted_map_init(m, 1);                                                   \
+    typeof((m)._key) __k = (key_expr);                                         \
+    typeof((m)._val) __v = (val_expr);                                         \
+    SMapHeader *__sh = (m).h;                                                  \
+    size_t __n = __sh->len, __lo = 0, __hi = __n;                              \
+    bool __found = false;                                                      \
+                                                                               \
     /* binary search */                                                        \
-    while (_lo < _hi) {                                                        \
-      size_t _mid = (_lo + _hi) / 2;                                           \
-      if (_p.key < (m)[_mid].key)                                              \
-        _hi = _mid;                                                            \
-      else if (_p.key > (m)[_mid].key)                                         \
-        _lo = _mid + 1;                                                        \
+    while (__lo < __hi) {                                                      \
+      size_t __mid = (__lo + __hi) >> 1;                                       \
+      typeof((m)._key) __mk = *_sm_keyptr(m, __mid);                           \
+      if (__k < __mk)                                                          \
+        __hi = __mid;                                                          \
+      else if (__k > __mk)                                                     \
+        __lo = __mid + 1;                                                      \
       else {                                                                   \
-        (m)[_mid].val = _p.val;                                                \
-        _replaced = true;                                                      \
+        *_sm_valptr(m, __mid) = __v;                                           \
+        __found = true;                                                        \
         break;                                                                 \
       }                                                                        \
     }                                                                          \
-    if (!_replaced) {                                                          \
-      _sm_grow((void **)&(m), 1, sizeof *(m));                                 \
-      memmove(&(m)[_lo + 1], &(m)[_lo], (_n - _lo) * sizeof *(m));             \
-      (m)[_lo] = _p;                                                           \
+                                                                               \
+    if (!__found) {                                                            \
+      _sm_ensure(m);                                                           \
+      __sh = (m).h;                                                            \
+      __n = __sh->len;                                                         \
+      __lo = __lo;                                                             \
+      size_t __stride = _sm_stride(m);                                         \
+      char *__base = _sm_data(m);                                              \
+                                                                               \
+      /* shift right to make room */                                           \
+      memmove(__base + (__lo + 1) * __stride, __base + __lo * __stride,        \
+              (__n - __lo) * __stride);                                        \
+                                                                               \
+      *_sm_keyptr(m, __lo) = __k;                                              \
+      *_sm_valptr(m, __lo) = __v;                                              \
+      __sh->len = __n + 1;                                                     \
     }                                                                          \
   } while (0)
 
-// ─── lookup: returns V* or NULL ─────────────────────────────────────────
-#define sorted_map_get(m, K, V, KEY)                                           \
+// —— lookup: returns pointer to V or NULL ——
+#define sorted_map_get(m, key_expr)                                            \
   ({                                                                           \
-    size_t _n = sm_len(m), _lo = 0, _hi = _n;                                  \
-    V *_res = NULL;                                                            \
-    while (_lo < _hi) {                                                        \
-      size_t _mid = (_lo + _hi) / 2;                                           \
-      if ((KEY) < (m)[_mid].key)                                               \
-        _hi = _mid;                                                            \
-      else if ((KEY) > (m)[_mid].key)                                          \
-        _lo = _mid + 1;                                                        \
-      else {                                                                   \
-        _res = &(m)[_mid].val;                                                 \
-        break;                                                                 \
+    typeof((m)._val) *__res = NULL;                                            \
+    if ((m).h) {                                                               \
+      typeof((m)._key) __k = (key_expr);                                       \
+      SMapHeader *__sh = (m).h;                                                \
+      size_t __lo = 0, __hi = __sh->len;                                       \
+      while (__lo < __hi) {                                                    \
+        size_t __mid = (__lo + __hi) >> 1;                                     \
+        typeof((m)._key) __mk = *_sm_keyptr(m, __mid);                         \
+        if (__k < __mk)                                                        \
+          __hi = __mid;                                                        \
+        else if (__k > __mk)                                                   \
+          __lo = __mid + 1;                                                    \
+        else {                                                                 \
+          __res = _sm_valptr(m, __mid);                                        \
+          break;                                                               \
+        }                                                                      \
       }                                                                        \
     }                                                                          \
-    _res;                                                                      \
+    __res;                                                                     \
   })
 
-// ─── iterate in sorted order ────────────────────────────────────────────
-#define sorted_map_for(it, m)                                                  \
-  for (size_t _i = 0, _n = sm_len(m); _i < _n; ++_i)                           \
-    for (__typeof__(*(m)) *it = &((m)[_i]); it; it = NULL)
+// —— iterate in sorted order ——
+#define sorted_map_for(m, it_k, it_v)                                          \
+  for (size_t __i = 0, __n = sm_len(m); __i < __n; ++__i)                      \
+    for (int __once1 = 1; __once1; __once1 = 0)                                \
+      for (typeof((m)._key) it_k = *_sm_keyptr(m, __i); __once1; __once1 = 0)  \
+        for (int __once2 = 1; __once2; __once2 = 0)                            \
+          for (typeof((m)._val) it_v = *_sm_valptr(m, __i); __once2;           \
+               __once2 = 0)
 
 #endif // SORTED_MAP_H
