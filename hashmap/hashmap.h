@@ -1,4 +1,3 @@
-// hashmap.h
 #ifndef HASHMAP_H
 #define HASHMAP_H
 
@@ -8,51 +7,56 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* —— internal node type (chaining) —— */
+// —— internal node type (chaining) ——
 typedef struct HNode {
   struct HNode *next;
-  char data[]; /* key bytes followed by value bytes */
+  char data[]; // key bytes followed by value bytes
 } HNode;
 
-/* —— the map “object” —— */
+// —— core map metadata ——
 typedef struct {
   size_t key_size, val_size, bucket_count;
   HNode **buckets;
 } HashMap;
 
-/* —— alias for your map variable —— */
-#define Map(K, V) HashMap *
+// —— declare a map variable with key type K and value type V ——
+#define Map(K, V)                                                              \
+  struct {                                                                     \
+    HashMap *h;                                                                \
+    K _key;                                                                    \
+    V _val;                                                                    \
+  }
 
-/* —— initialize a Map(K,V) with `n_buckets` —— */
-#define map_init(m, K, V, n_buckets)                                           \
+// —— initialize a map with `n_buckets` ——
+#define map_init(m, n_buckets)                                                 \
   do {                                                                         \
-    Map(K, V) _tmp = malloc(sizeof(HashMap));                                  \
-    assert(_tmp);                                                              \
-    _tmp->key_size = sizeof(K);                                                \
-    _tmp->val_size = sizeof(V);                                                \
-    _tmp->bucket_count = (n_buckets);                                          \
-    _tmp->buckets = calloc(_tmp->bucket_count, sizeof(HNode *));               \
-    assert(_tmp->buckets);                                                     \
-    (m) = _tmp;                                                                \
+    (m).h = malloc(sizeof(HashMap));                                           \
+    assert((m).h);                                                             \
+    (m).h->key_size = sizeof((m)._key);                                        \
+    (m).h->val_size = sizeof((m)._val);                                        \
+    (m).h->bucket_count = (n_buckets);                                         \
+    (m).h->buckets = calloc((m).h->bucket_count, sizeof(HNode *));             \
+    assert((m).h->buckets);                                                    \
   } while (0)
 
-/* —— free everything — no type parameters needed —— */
+// —— free all nodes and buckets ——
 #define map_free(m)                                                            \
   do {                                                                         \
-    HashMap *_m = (m);                                                         \
-    for (size_t _i = 0; _i < _m->bucket_count; ++_i) {                         \
-      HNode *_n = _m->buckets[_i];                                             \
+    HashMap *_ht = (m).h;                                                      \
+    for (size_t _i = 0; _i < _ht->bucket_count; ++_i) {                        \
+      HNode *_n = _ht->buckets[_i];                                            \
       while (_n) {                                                             \
         HNode *_nx = _n->next;                                                 \
         free(_n);                                                              \
         _n = _nx;                                                              \
       }                                                                        \
     }                                                                          \
-    free(_m->buckets);                                                         \
-    free(_m);                                                                  \
+    free(_ht->buckets);                                                        \
+    free(_ht);                                                                 \
+    (m).h = NULL;                                                              \
   } while (0)
 
-/* —— a simple FNV-1a over raw bytes —— */
+// —— FNV-1a hash over raw bytes ——
 static inline size_t _hash_bytes(const void *data, size_t len) {
   size_t hash = (size_t)2166136261u;
   const unsigned char *p = data;
@@ -63,53 +67,78 @@ static inline size_t _hash_bytes(const void *data, size_t len) {
   return hash;
 }
 
-/* —— insert or overwrite —— */
-#define map_put(m, K, V, key, val)                                             \
+// —— insert or overwrite a (key, val) pair ——
+#define map_put(m, key_expr, val_expr)                                         \
   do {                                                                         \
-    Map(K, V) _m = (m);                                                        \
-    /* stash into locals so we can take their address */                       \
-    K _key = (key);                                                            \
-    V _val = (val);                                                            \
-    size_t _b = _hash_bytes(&_key, _m->key_size) % _m->bucket_count;           \
-    HNode **_buck = &_m->buckets[_b];                                          \
+    HashMap *_ht = (m).h;                                                      \
+    typeof((m)._key) _key = (key_expr);                                        \
+    typeof((m)._val) _val = (val_expr);                                        \
+    size_t _b = _hash_bytes(&_key, _ht->key_size) % _ht->bucket_count;         \
+    HNode **_buck = &_ht->buckets[_b];                                         \
     HNode *_n;                                                                 \
     int _found = 0;                                                            \
-    /* scan for existing key */                                                \
     for (_n = *_buck; _n; _n = _n->next) {                                     \
-      if (memcmp(_n->data, &_key, _m->key_size) == 0) {                        \
-        /* overwrite value portion */                                          \
-        memcpy(_n->data + _m->key_size, &_val, _m->val_size);                  \
+      if (memcmp(_n->data, &_key, _ht->key_size) == 0) {                       \
+        memcpy(_n->data + _ht->key_size, &_val, _ht->val_size);                \
         _found = 1;                                                            \
         break;                                                                 \
       }                                                                        \
     }                                                                          \
     if (!_found) {                                                             \
-      /* not found → prepend new node */                                       \
-      HNode *_new = malloc(sizeof(HNode) + _m->key_size + _m->val_size);       \
+      HNode *_new = malloc(sizeof(HNode) + _ht->key_size + _ht->val_size);     \
       assert(_new);                                                            \
-      memcpy(_new->data, &_key, _m->key_size);                                 \
-      memcpy(_new->data + _m->key_size, &_val, _m->val_size);                  \
+      memcpy(_new->data, &_key, _ht->key_size);                                \
+      memcpy(_new->data + _ht->key_size, &_val, _ht->val_size);                \
       _new->next = *_buck;                                                     \
       *_buck = _new;                                                           \
     }                                                                          \
   } while (0)
 
-/* —— lookup: returns V* or NULL —— */
-#define map_get(m, K, V, key)                                                  \
+// —— lookup: returns pointer to value or NULL ——
+#define map_get(m, key_expr)                                                   \
   ({                                                                           \
-    Map(K, V) _m = (m);                                                        \
-    K _key = (key);                                                            \
-    size_t _b = _hash_bytes(&_key, _m->key_size) % _m->bucket_count;           \
-    HNode *_n = _m->buckets[_b];                                               \
-    V *_out = NULL;                                                            \
+    HashMap *_ht = (m).h;                                                      \
+    typeof((m)._key) _key = (key_expr);                                        \
+    size_t _b = _hash_bytes(&_key, _ht->key_size) % _ht->bucket_count;         \
+    HNode *_n = _ht->buckets[_b];                                              \
+    typeof((m)._val) *_out = NULL;                                             \
     while (_n) {                                                               \
-      if (memcmp(_n->data, &_key, _m->key_size) == 0) {                        \
-        _out = (V *)(_n->data + _m->key_size);                                 \
+      if (memcmp(_n->data, &_key, _ht->key_size) == 0) {                       \
+        _out = (typeof((m)._val) *)(_n->data + _ht->key_size);                 \
         break;                                                                 \
       }                                                                        \
       _n = _n->next;                                                           \
     }                                                                          \
     _out;                                                                      \
   })
+
+// —— iterate all (key, value) pairs ——
+#define map_for(m, it_k, it_v)                                                 \
+  for (size_t _bi = 0; _bi < (m).h->bucket_count; ++_bi)                       \
+    for (HNode *_n = (m).h->buckets[_bi]; _n; _n = _n->next)                   \
+      for (int _once_k = 1; _once_k; _once_k = 0)                              \
+        for (typeof((m)._key) it_k = *(typeof((m)._key) *)_n->data; _once_k;   \
+             _once_k = 0)                                                      \
+          for (int _once_v = 1; _once_v; _once_v = 0)                          \
+            for (typeof((m)._val) it_v =                                       \
+                     *(typeof((m)._val) *)(_n->data + (m).h->key_size);        \
+                 _once_v; _once_v = 0)
+
+// —— iterate keys only ——
+#define map_keys(m, it_k)                                                      \
+  for (size_t _bi = 0; _bi < (m).h->bucket_count; ++_bi)                       \
+    for (HNode *_n = (m).h->buckets[_bi]; _n; _n = _n->next)                   \
+      for (int _once_k = 1; _once_k; _once_k = 0)                              \
+        for (typeof((m)._key) it_k = *(typeof((m)._key) *)_n->data; _once_k;   \
+             _once_k = 0)
+
+// —— iterate values only ——
+#define map_vals(m, it_v)                                                      \
+  for (size_t _bi = 0; _bi < (m).h->bucket_count; ++_bi)                       \
+    for (HNode *_n = (m).h->buckets[_bi]; _n; _n = _n->next)                   \
+      for (int _once_v = 1; _once_v; _once_v = 0)                              \
+        for (typeof((m)._val) it_v =                                           \
+                 *(typeof((m)._val) *)(_n->data + (m).h->key_size);            \
+             _once_v; _once_v = 0)
 
 #endif // HASHMAP_H

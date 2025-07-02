@@ -1,26 +1,40 @@
-// main.c
 #include "hashmap.h"
 #include <stdio.h>
 
 typedef struct {
-  int value;
+  const char *value;
 } Foo;
 
+typedef struct {
+  int value;
+} Bar;
+
 int main(void) {
-  /* declare and init a Map<int,Foo> with 16 buckets */
   Map(int, Foo) m;
-  map_init(m, int, Foo, 16);
+  map_init(m, 8);
 
-  /* insert two entries */
-  map_put(m, int, Foo, 1, (Foo){.value = 10});
-  map_put(m, int, Foo, 42, (Foo){.value = 99});
+  map_put(m, 1, (Foo){.value = "hi"});
+  map_put(m, 2, (Foo){.value = "value"});
+  map_put(m, 3, (Foo){.value = "next"});
+  map_put(m, 2, (Foo){.value = "other"});
+  // compiler error:
+  // map_put(m, 2, (Bar){.value = 200});
 
-  /* lookup key=42 */
-  Foo *f = map_get(m, int, Foo, 42);
-  if (f)
-    printf("got key 42 → %d\n", f->value);
+  Foo *f2 = map_get(m, 2);
+  if (f2)
+    printf("Key 2 -> %s\n", f2->value);
+  if (!map_get(m, 4))
+    printf("Key 4 not found\n");
 
-  /* cleanup */
+  printf("All (key,value) pairs:\n");
+  map_for(m, k, v) { printf("  %d -> %s\n", k, v.value); }
+
+  printf("Keys:\n");
+  map_keys(m, k) { printf("  %d\n", k); }
+
+  printf("Values:\n");
+  map_vals(m, val) { printf("  %s\n", val.value); }
+
   map_free(m);
   return 0;
 }
