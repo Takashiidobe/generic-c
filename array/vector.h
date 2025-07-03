@@ -32,19 +32,40 @@ typedef struct {
     }                                                                          \
   } while (0)
 
-/*–– ensure room for at least `n` elements ––*/
 #define vec_reserve(a, n)                                                      \
-  _vec_grow((void **)&(a), (n) - vec_len(a), sizeof *(a))
+  do {                                                                         \
+    size_t _old_len = vec_len(a);                                              \
+    if ((n) > vec_cap(a)) {                                                    \
+      /* grow capacity up to at least n, but _vec_grow will also add to length \
+       */                                                                      \
+      _vec_grow((void **)&(a), (n) - _old_len, sizeof *(a));                   \
+      /* undo the accidental length bump */                                    \
+      _vec_header(a)->length = _old_len;                                       \
+    }                                                                          \
+  } while (0)
 
 /*–– append one element ––*/
 #define vec_push(a, val)                                                       \
   do {                                                                         \
+    /* remember old length */                                                  \
+    size_t _old_len = vec_len(a);                                              \
+    /* grow by exactly one slot (this bumps length by +1) */                   \
     _vec_grow((void **)&(a), 1, sizeof *(a));                                  \
-    (a)[_vec_header(a)->length - 1] = (val);                                   \
+    /* store into the newly-allocated slot */                                  \
+    (a)[_old_len] = (val);                                                     \
   } while (0)
 
 /*–– remove & return last element ––*/
 #define vec_pop(a) ((a)[--_vec_header(a)->length])
+
+/*–– get the element at index `idx` (with bounds‐check) ––*/
+#define vec_get(a, idx)                                                        \
+  ({                                                                           \
+    size_t __i = (idx);                                                        \
+    /* must have been initialized and in‐bounds */                             \
+    assert((a) && __i < vec_len(a));                                           \
+    (a)[__i];                                                                  \
+  })
 
 /*–– set length to 0 (does not free memory) ––*/
 #define vec_clear(a)                                                           \
@@ -57,6 +78,10 @@ typedef struct {
 #define vec_for(item, a)                                                       \
   for (size_t _i = 0, _n = vec_len(a); _i < _n; ++_i)                          \
     for (__typeof__((a)[0]) *item = &(a)[_i]; item; item = NULL)
+
+#define vec_enum(idx, item, a)                                                 \
+  for (size_t idx = 0, _vec_enum_n = vec_len(a); idx < _vec_enum_n; ++idx)     \
+    for (__typeof__((a)[0]) *item = &(a)[idx]; item; item = NULL)
 
 /*–– internal grow routine ––*/
 static void _vec_grow(void **arr, size_t increment, size_t elem_size) {

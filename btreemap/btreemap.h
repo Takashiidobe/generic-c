@@ -1,6 +1,6 @@
-// sorted_map.h
-#ifndef SORTED_MAP_H
-#define SORTED_MAP_H
+// bmap.h
+#ifndef btreemap_h
+#define btreemap_h
 
 #include <assert.h>
 #include <stdbool.h>
@@ -15,7 +15,7 @@ typedef struct {
 } SMapHeader;
 
 // —— declare a sorted‐map variable for key type K and value type V ——
-#define SortedMap(K, V)                                                        \
+#define BMap(K, V)                                                             \
   struct {                                                                     \
     SMapHeader *h;                                                             \
     K _key;                                                                    \
@@ -37,7 +37,7 @@ typedef struct {
   ((typeof((m)._val) *)(_sm_data(m) + (i) * _sm_stride(m) + sizeof((m)._key)))
 
 // —— initialize & free ——
-#define sorted_map_init(m, init_cap)                                           \
+#define bmap_init(m, init_cap)                                                 \
   do {                                                                         \
     size_t __stride = _sm_stride(m);                                           \
     size_t __hdr = offsetof(SMapHeader, data);                                 \
@@ -47,7 +47,7 @@ typedef struct {
     (m).h->cap = (init_cap);                                                   \
   } while (0)
 
-#define sorted_map_free(m)                                                     \
+#define bmap_free(m)                                                           \
   do {                                                                         \
     if ((m).h) {                                                               \
       free((m).h);                                                             \
@@ -71,10 +71,10 @@ typedef struct {
   } while (0)
 
 // —— insert or overwrite ——
-#define sorted_map_put(m, key_expr, val_expr)                                  \
+#define bmap_put(m, key_expr, val_expr)                                        \
   do {                                                                         \
     if (!(m).h)                                                                \
-      sorted_map_init(m, 1);                                                   \
+      bmap_init(m, 1);                                                         \
     typeof((m)._key) __k = (key_expr);                                         \
     typeof((m)._val) __v = (val_expr);                                         \
     SMapHeader *__sh = (m).h;                                                  \
@@ -115,7 +115,7 @@ typedef struct {
   } while (0)
 
 // —— lookup: returns pointer to V or NULL ——
-#define sorted_map_get(m, key_expr)                                            \
+#define bmap_get(m, key_expr)                                                  \
   ({                                                                           \
     typeof((m)._val) *__res = NULL;                                            \
     if ((m).h) {                                                               \
@@ -139,7 +139,7 @@ typedef struct {
   })
 
 // —— iterate in sorted order ——
-#define sorted_map_for(m, it_k, it_v)                                          \
+#define bmap_for(m, it_k, it_v)                                                \
   for (size_t __i = 0, __n = sm_len(m); __i < __n; ++__i)                      \
     for (int __once1 = 1; __once1; __once1 = 0)                                \
       for (typeof((m)._key) it_k = *_sm_keyptr(m, __i); __once1; __once1 = 0)  \
@@ -147,4 +147,4 @@ typedef struct {
           for (typeof((m)._val) it_v = *_sm_valptr(m, __i); __once2;           \
                __once2 = 0)
 
-#endif // SORTED_MAP_H
+#endif // btreemap_h
