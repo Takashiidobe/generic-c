@@ -110,4 +110,18 @@ static void _vec_grow(void **arr, size_t increment, size_t elem_size) {
   *arr = h->data;
 }
 
+#define vec_init(a, ...)                                                       \
+  do {                                                                         \
+    __auto_type _vec_src = __VA_ARGS__;                                        \
+    size_t _vec_n = sizeof _vec_src / sizeof _vec_src[0];                      \
+    size_t _vec_hdr = offsetof(VecHeader, data);                               \
+    size_t _vec_sz = _vec_hdr + _vec_n * sizeof _vec_src[0];                   \
+    VecHeader *_vec_h = malloc(_vec_sz);                                       \
+    assert(_vec_h);                                                            \
+    _vec_h->length = _vec_n;                                                   \
+    _vec_h->capacity = _vec_n;                                                 \
+    memcpy(_vec_h->data, _vec_src, _vec_n * sizeof _vec_src[0]);               \
+    (a) = (typeof(a))_vec_h->data;                                             \
+  } while (0)
+
 #endif // VECTOR_H
