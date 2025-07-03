@@ -33,7 +33,6 @@ int main(void) {
   printf("Popped front=%d, back=%d\n", front, back);
   printf("After pops: len=%zu\n", dq_len(dq));
   printf("Contents via deque_for: ");
-  int *it;
   deque_for(it, dq) { printf("%d ", *it); }
   printf("\n");
 

@@ -56,7 +56,7 @@ typedef struct {
   } while (0)
 
 /*–– remove & return last element ––*/
-#define vec_pop(a) ((a)[--_vec_header(a)->length])
+#define vec_pop(a) (assert(vec_len(a) > 0), (a)[--_vec_header(a)->length])
 
 /*–– get the element at index `idx` (with bounds‐check) ––*/
 #define vec_get(a, idx)                                                        \
@@ -84,7 +84,7 @@ typedef struct {
     for (__typeof__((a)[0]) *item = &(a)[idx]; item; item = NULL)
 
 /*–– internal grow routine ––*/
-static void _vec_grow(void **arr, size_t increment, size_t elem_size) {
+static inline void _vec_grow(void **arr, size_t increment, size_t elem_size) {
   VecHeader *h = *arr ? _vec_header(*arr) : NULL;
   size_t new_len = (h ? h->length : 0) + increment;
   size_t new_cap = h ? h->capacity : 0;
@@ -112,8 +112,10 @@ static void _vec_grow(void **arr, size_t increment, size_t elem_size) {
 
 #define vec_init(a, ...)                                                       \
   do {                                                                         \
-    __auto_type _vec_src = __VA_ARGS__;                                        \
-    size_t _vec_n = sizeof _vec_src / sizeof _vec_src[0];                      \
+    /* count from sizeof on the array literal itself (unevaluated, no decay);  \
+       _vec_src decays to a pointer only for the memcpy source */              \
+    size_t _vec_n = sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]);            \
+    __auto_type _vec_src = (__VA_ARGS__);                                      \
     size_t _vec_hdr = offsetof(VecHeader, data);                               \
     size_t _vec_sz = _vec_hdr + _vec_n * sizeof _vec_src[0];                   \
     VecHeader *_vec_h = malloc(_vec_sz);                                       \

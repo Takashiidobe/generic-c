@@ -26,6 +26,11 @@ int main(void) {
   if (!map_get(m, 4))
     printf("Key 4 not found\n");
 
+  printf("len = %zu\n", map_len(m));
+  printf("remove 2 -> %d\n", map_remove(m, 2));
+  printf("remove 2 again -> %d\n", map_remove(m, 2));
+  printf("len = %zu\n", map_len(m));
+
   printf("All (key,value) pairs:\n");
   map_for(m, k, v) { printf("  %d -> %s\n", k, v.value); }
 
@@ -36,5 +41,18 @@ int main(void) {
   map_vals(m, val) { printf("  %s\n", val.value); }
 
   map_free(m);
+
+  // string keys compared by content, plus growth past the initial bucket count
+  Map(const char *, int) s;
+  map_init_with(s, 2, gc_str_hash, gc_str_eq);
+  for (int i = 0; i < 8; ++i) {
+    char *key = malloc(8);
+    snprintf(key, 8, "k%d", i);
+    map_put(s, key, i * 10);
+  }
+  int *v3 = map_get(s, "k3");
+  printf("k3 -> %d, len = %zu\n", v3 ? *v3 : -1, map_len(s));
+  map_keys(s, k) { free((void *)k); }
+  map_free(s);
   return 0;
 }

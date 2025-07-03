@@ -1,19 +1,15 @@
 #include <stdio.h>
 
-// pretend we have the above two macros in "tuple.h"
 #include "tuple.h"
 
-// but most of the time you can *infer* the types automatically:
-#define auto __auto_type // GCC/Clang extension
-
 int main(void) {
-  auto p2 = make_tuple(7, 2.71828f);
-  // p2 is now a struct { int first; float second; }
-  printf("p2 = (%d, %.5f)\n", p2.first, p2.second);
+  // __auto_type (not C23 auto): gcc forbids defining the anonymous tuple
+  // struct type inside a C23 auto initializer. fields are _0, _1, ...
+  __auto_type p2 = make_tuple(7, 2.71828f);
+  printf("p2 = (%d, %.5f)\n", p2._0, p2._1);
 
-  auto p3 = make_tuple("hello", 123u);
-  // p3 is struct { const char *first; unsigned second; }
-  printf("p3 = (%s, %u)\n", p3.first, p3.second);
+  __auto_type p3 = make_tuple("hello", 123u);
+  printf("p3 = (%s, %u)\n", tuple_get(p3, 0), tuple_get(p3, 1));
 
   return 0;
 }

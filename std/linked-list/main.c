@@ -28,7 +28,6 @@ int main(void) {
 
   // Iterate forward
   printf("Forward iteration:\n");
-  Foo *it;
   list_for(it, &list) { printf("  %d\n", it->value); }
 
   // Iterate backward

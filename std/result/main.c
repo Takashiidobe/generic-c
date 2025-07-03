@@ -2,19 +2,25 @@
 #include <stdio.h>
 #include <stdlib.h> // for strtol
 
-typedef Result(int, const char *) ParseIntResult;
+DEFINE_RESULT(ParseIntResult, int, const char *);
 
-// Declare the function with generic Result:
+// crosses a function boundary: the value returned here is assigned to a
+// ParseIntResult in main, which only works because both share the named type.
 static ParseIntResult parse_int(const char *s) {
   char *end;
   long val = strtol(s, &end, 10);
   if (*end != '\0')
-    return (ParseIntResult){.is_ok = false, .as.err = "invalid integer"};
-  return (ParseIntResult){.is_ok = true, .as.ok = val};
+    return RESULT_ERR(ParseIntResult, "invalid integer");
+  return RESULT_OK(ParseIntResult, (int)val);
 }
 
 int main(void) {
-  ParseIntResult r = parse_int("123");
-  printf("Parsed: %d\n", unwrap_err(r));
+  ParseIntResult ok = parse_int("123");
+  if (result_is_ok(ok))
+    printf("Parsed: %d\n", unwrap(ok));
+
+  ParseIntResult bad = parse_int("12x");
+  if (result_is_err(bad))
+    printf("Error: %s\n", unwrap_err(bad));
   return 0;
 }

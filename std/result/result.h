@@ -3,28 +3,27 @@
 
 #include <assert.h>
 #include <stdbool.h>
-#include <stdlib.h>
 
-// GNU C extension: typeof on a compound literal to define the anonymous struct
-// type
-#ifdef __GNUC__
-#define Result(T, E)                                                           \
-  __typeof__((struct {                                                         \
+// Define a named Result<T, E> type. Mirrors DEFINE_OPTION: each anonymous
+// `typeof` struct is a distinct, incompatible type, so a named typedef is
+// required for values to pass across function boundaries.
+//
+//   DEFINE_RESULT(ParseResult, int, const char *);
+//   ParseResult r = RESULT_OK(ParseResult, 5);
+#define DEFINE_RESULT(Name, T, E)                                              \
+  typedef struct Name {                                                        \
     bool is_ok;                                                                \
     union {                                                                    \
       T ok;                                                                    \
       E err;                                                                   \
     } as;                                                                      \
-  }){.is_ok = 0})
-#else
-#error "Result<T,E> requires GNU typeof extension"
-#endif
+  } Name
 
 // Construct an Ok(T) result
-#define RESULT_OK(T, E, VAL) ((Result(T, E)){.is_ok = true, .as.ok = (VAL)})
+#define RESULT_OK(Name, VAL) ((Name){.is_ok = true, .as.ok = (VAL)})
 
 // Construct an Err(E) result
-#define RESULT_ERR(T, E, ERR) ((Result(T, E)){.is_ok = false, .as.err = (ERR)})
+#define RESULT_ERR(Name, ERR) ((Name){.is_ok = false, .as.err = (ERR)})
 
 // Predicates
 #define result_is_ok(R) ((R).is_ok)

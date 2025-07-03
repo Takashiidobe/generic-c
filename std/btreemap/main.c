@@ -24,19 +24,26 @@ int main(void) {
   if (p)
     printf("Key 2 => %d\n", p->value);
 
+  printf("len = %zu\n", sm_len(m));
+  printf("remove 2 -> %d\n", bmap_remove(m, 2));
+  printf("remove 2 again -> %d\n", bmap_remove(m, 2));
+  printf("len = %zu\n", sm_len(m));
+
   printf("All entries:\n");
   bmap_for(m, k, v) { printf("  %d => %d\n", k, v.value); }
 
   bmap_free(m);
 
+  // string keys sorted by content via gc_str_cmp
   BMap(const char *, Bar) map;
-  bmap_init(map, 1);
+  bmap_init_with(map, 1, gc_str_cmp);
   bmap_put(map, "k", (Bar){.value = "xd"});
   bmap_put(map, "k2", (Bar){.value = "xdd"});
   bmap_put(map, "k1", (Bar){.value = "xddd"});
 
-  printf("All entries:\n");
+  printf("All entries (sorted by key):\n");
   bmap_for(map, k, v) { printf("  %s => %s\n", k, v.value); }
 
+  bmap_free(map);
   return 0;
 }

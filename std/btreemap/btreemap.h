@@ -8,9 +8,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-// —— internal header: length, capacity, and raw data array ——
+#include "../hash/hash.h"
+
+// —— internal header: length, capacity, comparator, and raw data array ——
+// cmp == NULL means order keys with the built-in < / > operators (scalars);
+// set a comparator (e.g. gc_str_cmp) via bmap_init_with for other key types.
 typedef struct {
   size_t len, cap;
+  gc_cmp_fn cmp;
   char data[]; // floor(cap) slots of [ key_bytes | val_bytes ]
 } SMapHeader;
 
@@ -25,8 +30,17 @@ typedef struct {
 // —— helpers ——
 // number of elements
 #define sm_len(m) ((m).h ? (m).h->len : 0)
-// storage stride = sizeof(key)+sizeof(val)
-#define _sm_stride(m) (sizeof((m)._key) + sizeof((m)._val))
+#define _sm_align_up(n, a) (((n) + (a) - 1) & ~((size_t)(a) - 1))
+// larger of the key/value alignments — the alignment of a whole slot
+#define _sm_align(m)                                                           \
+  (_Alignof(typeof((m)._key)) > _Alignof(typeof((m)._val))                     \
+       ? _Alignof(typeof((m)._key))                                            \
+       : _Alignof(typeof((m)._val)))
+// byte offset of the value within a slot: key size rounded up to val alignment
+#define _sm_valoff(m) _sm_align_up(sizeof((m)._key), _Alignof(typeof((m)._val)))
+// storage stride: value end rounded up to slot alignment, so every slot and
+// both of its fields stay aligned
+#define _sm_stride(m) _sm_align_up(_sm_valoff(m) + sizeof((m)._val), _sm_align(m))
 // raw byte pointer
 #define _sm_data(m) ((char *)(m).h->data)
 // pointer to key slot i
@@ -34,10 +48,15 @@ typedef struct {
   ((typeof((m)._key) *)(_sm_data(m) + (i) * _sm_stride(m)))
 // pointer to val slot i
 #define _sm_valptr(m, i)                                                       \
-  ((typeof((m)._val) *)(_sm_data(m) + (i) * _sm_stride(m) + sizeof((m)._key)))
+  ((typeof((m)._val) *)(_sm_data(m) + (i) * _sm_stride(m) + _sm_valoff(m)))
+// three-way compare of key __k against slot i, honoring a custom comparator
+#define _sm_cmp(m, sh, k, i)                                                   \
+  ((sh)->cmp ? (sh)->cmp(&(k), _sm_keyptr(m, i), sizeof((m)._key))             \
+             : ((k) < *_sm_keyptr(m, i) ? -1                                   \
+                                        : ((k) > *_sm_keyptr(m, i) ? 1 : 0)))
 
-// —— initialize & free ——
-#define bmap_init(m, init_cap)                                                 \
+// —— initialize with a custom comparator (use gc_str_cmp for string keys) ——
+#define bmap_init_with(m, init_cap, cmp_fn)                                    \
   do {                                                                         \
     size_t __stride = _sm_stride(m);                                           \
     size_t __hdr = offsetof(SMapHeader, data);                                 \
@@ -45,7 +64,11 @@ typedef struct {
     assert((m).h);                                                             \
     (m).h->len = 0;                                                            \
     (m).h->cap = (init_cap);                                                   \
+    (m).h->cmp = (cmp_fn);                                                     \
   } while (0)
+
+// —— initialize & free (built-in scalar ordering) ——
+#define bmap_init(m, init_cap) bmap_init_with(m, init_cap, NULL)
 
 #define bmap_free(m)                                                           \
   do {                                                                         \
@@ -84,10 +107,10 @@ typedef struct {
     /* binary search */                                                        \
     while (__lo < __hi) {                                                      \
       size_t __mid = (__lo + __hi) >> 1;                                       \
-      typeof((m)._key) __mk = *_sm_keyptr(m, __mid);                           \
-      if (__k < __mk)                                                          \
+      int __c = _sm_cmp(m, __sh, __k, __mid);                                  \
+      if (__c < 0)                                                             \
         __hi = __mid;                                                          \
-      else if (__k > __mk)                                                     \
+      else if (__c > 0)                                                        \
         __lo = __mid + 1;                                                      \
       else {                                                                   \
         *_sm_valptr(m, __mid) = __v;                                           \
@@ -100,7 +123,6 @@ typedef struct {
       _sm_ensure(m);                                                           \
       __sh = (m).h;                                                            \
       __n = __sh->len;                                                         \
-      __lo = __lo;                                                             \
       size_t __stride = _sm_stride(m);                                         \
       char *__base = _sm_data(m);                                              \
                                                                                \
@@ -124,10 +146,10 @@ typedef struct {
       size_t __lo = 0, __hi = __sh->len;                                       \
       while (__lo < __hi) {                                                    \
         size_t __mid = (__lo + __hi) >> 1;                                     \
-        typeof((m)._key) __mk = *_sm_keyptr(m, __mid);                         \
-        if (__k < __mk)                                                        \
+        int __c = _sm_cmp(m, __sh, __k, __mid);                                \
+        if (__c < 0)                                                           \
           __hi = __mid;                                                        \
-        else if (__k > __mk)                                                   \
+        else if (__c > 0)                                                      \
           __lo = __mid + 1;                                                    \
         else {                                                                 \
           __res = _sm_valptr(m, __mid);                                        \
@@ -136,6 +158,36 @@ typedef struct {
       }                                                                        \
     }                                                                          \
     __res;                                                                     \
+  })
+
+// —— remove a key: returns 1 if it was present, 0 otherwise ——
+#define bmap_remove(m, key_expr)                                               \
+  ({                                                                           \
+    int __removed = 0;                                                         \
+    if ((m).h) {                                                               \
+      typeof((m)._key) __k = (key_expr);                                       \
+      SMapHeader *__sh = (m).h;                                                \
+      size_t __lo = 0, __hi = __sh->len;                                       \
+      while (__lo < __hi) {                                                    \
+        size_t __mid = (__lo + __hi) >> 1;                                     \
+        int __c = _sm_cmp(m, __sh, __k, __mid);                                \
+        if (__c < 0)                                                           \
+          __hi = __mid;                                                        \
+        else if (__c > 0)                                                      \
+          __lo = __mid + 1;                                                    \
+        else {                                                                 \
+          size_t __stride = _sm_stride(m);                                     \
+          char *__base = _sm_data(m);                                          \
+          memmove(__base + __mid * __stride,                                   \
+                  __base + (__mid + 1) * __stride,                             \
+                  (__sh->len - __mid - 1) * __stride);                         \
+          __sh->len--;                                                         \
+          __removed = 1;                                                       \
+          break;                                                               \
+        }                                                                      \
+      }                                                                        \
+    }                                                                          \
+    __removed;                                                                 \
   })
 
 // —— iterate in sorted order ——
