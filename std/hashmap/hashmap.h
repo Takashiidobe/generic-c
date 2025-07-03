@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../hash/hash.h"
+
 // —— internal node type (chaining) ——
 typedef struct HNode {
   struct HNode *next;
@@ -55,17 +57,6 @@ typedef struct {
     free(_ht);                                                                 \
     (m).h = NULL;                                                              \
   } while (0)
-
-// —— FNV-1a hash over raw bytes ——
-static inline size_t _hash_bytes(const void *data, size_t len) {
-  size_t hash = (size_t)2166136261u;
-  const unsigned char *p = data;
-  for (size_t i = 0; i < len; i++) {
-    hash ^= p[i];
-    hash *= 16777619u;
-  }
-  return hash;
-}
 
 // —— insert or overwrite a (key, val) pair ——
 #define map_put(m, key_expr, val_expr)                                         \
