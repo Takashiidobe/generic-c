@@ -1,4 +1,5 @@
 #include "result.h"
+#include "../test/assert.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -15,12 +16,12 @@ static ParseIntResult parse_int(const char *string) {
 
 int main(void) {
   ParseIntResult ok = parse_int("123");
-  assert(result_is_ok(ok));
-  assert(!result_is_err(ok));
-  assert(unwrap(ok) == 123);
+  GC_ASSERT(result_is_ok(ok));
+  GC_ASSERT(!result_is_err(ok));
+  GC_ASSERT(unwrap(ok) == 123);
 
   ParseIntResult bad = parse_int("12x");
-  assert(result_is_err(bad));
-  assert(!result_is_ok(bad));
-  assert(strcmp(unwrap_err(bad), "invalid integer") == 0);
+  GC_ASSERT(result_is_err(bad));
+  GC_ASSERT(!result_is_ok(bad));
+  GC_ASSERT(strcmp(unwrap_err(bad), "invalid integer") == 0);
 }

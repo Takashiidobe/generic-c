@@ -4,13 +4,13 @@
 #include "../hashmap/hashmap.h"
 #include "../hashset/hashset.h"
 #include "../linked-list/list.h"
+#include "../test/assert.h"
 #include "../vecdeque/vecdeque.h"
 
-#include <assert.h>
 #include <stdint.h>
 
 #define ASSERT_ALIGNED(ptr)                                                    \
-  assert((uintptr_t)(ptr) % _Alignof(max_align_t) == 0)
+  GC_ASSERT((uintptr_t)(ptr) % _Alignof(max_align_t) == 0)
 
 int main(void) {
   Vec(max_align_t) vec = NULL;

@@ -69,7 +69,8 @@ lint:
           -Wno-gnu-flexible-array-initializer -Wno-gnu-alignof-expression \
           -Wno-padded -Wno-unsafe-buffer-usage -Wno-covered-switch-default \
           -Wno-pre-c23-compat -Wno-pre-c11-compat -Wno-pre-c2x-compat \
-          -Wno-c++98-compat -Wno-implicit-void-ptr-cast"
+          -Wno-c++98-compat -Wno-implicit-void-ptr-cast \
+          -Wno-gnu-auto-type"
     for src in {{mains}}; do
         echo "=== $src ==="
         clang {{std}} -Weverything $supp -fsyntax-only "$src"

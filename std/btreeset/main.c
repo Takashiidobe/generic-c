@@ -1,4 +1,5 @@
 #include "btreeset.h"
+#include "../test/assert.h"
 
 #include <string.h>
 
@@ -11,17 +12,17 @@ int main(void) {
   bset_add(set, 7);
   bset_add(set, 5);
 
-  assert(bset_contains(set, 7));
-  assert(!bset_contains(set, 3));
-  assert(ss_len(set) == 3);
-  assert(bset_remove(set, 7));
-  assert(!bset_remove(set, 7));
-  assert(ss_len(set) == 2);
+  GC_ASSERT(bset_contains(set, 7));
+  GC_ASSERT(!bset_contains(set, 3));
+  GC_ASSERT(ss_len(set) == 3);
+  GC_ASSERT(bset_remove(set, 7));
+  GC_ASSERT(!bset_remove(set, 7));
+  GC_ASSERT(ss_len(set) == 2);
 
   const int expected[] = {5, 10};
   size_t index = 0;
-  bset_for(set, value) { assert(value == expected[index++]); }
-  assert(index == 2);
+  bset_for(set, value) { GC_ASSERT(value == expected[index++]); }
+  GC_ASSERT(index == 2);
   bset_free(set);
 
   BSet(const char *) names;
@@ -34,9 +35,9 @@ int main(void) {
   const char *ordered[] = {"alice", "bob", "charlie"};
   index = 0;
   bset_for(names, value) {
-    assert(strcmp(value, ordered[index]) == 0);
+    GC_ASSERT(strcmp(value, ordered[index]) == 0);
     ++index;
   }
-  assert(index == 3);
+  GC_ASSERT(index == 3);
   bset_free(names);
 }

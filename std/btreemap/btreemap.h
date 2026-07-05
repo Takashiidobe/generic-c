@@ -84,15 +84,18 @@ typedef struct {
 // —— grow capacity when full ——
 #define gc_sm_ensure(m)                                                          \
   do {                                                                         \
-    SMapHeader *gc_sh = (m).h;                                                  \
-    if (gc_sh->len >= gc_sh->cap) {                                              \
-      size_t gc_newc = gc_sh->cap ? gc_sh->cap * 2 : 1;                           \
-      size_t gc_stride = gc_sm_stride(m);                                         \
-      size_t gc_hdr = offsetof(SMapHeader, data);                               \
-      gc_sh = realloc(gc_sh, gc_hdr + gc_stride * gc_newc);                         \
-      assert(gc_sh);                                                            \
-      gc_sh->cap = gc_newc;                                                      \
-      (m).h = gc_sh;                                                            \
+    SMapHeader *gc_ensure_header = (m).h;                                       \
+    if (gc_ensure_header->len >= gc_ensure_header->cap) {                       \
+      size_t gc_ensure_capacity =                                               \
+          gc_ensure_header->cap ? gc_ensure_header->cap * 2 : 1;               \
+      size_t gc_ensure_stride = gc_sm_stride(m);                                \
+      size_t gc_ensure_offset = offsetof(SMapHeader, data);                     \
+      gc_ensure_header =                                                        \
+          realloc(gc_ensure_header,                                             \
+                  gc_ensure_offset + gc_ensure_stride * gc_ensure_capacity);    \
+      assert(gc_ensure_header);                                                 \
+      gc_ensure_header->cap = gc_ensure_capacity;                               \
+      (m).h = gc_ensure_header;                                                 \
     }                                                                          \
   } while (0)
 
