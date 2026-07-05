@@ -19,7 +19,8 @@ warn   := "-Wall -Wextra -Werror -Wundef -Wvla -Wpointer-arith " + \
 
 # every runnable translation unit
 mains  := "std/array/main.c std/btreemap/main.c std/btreeset/main.c " + \
-          "std/alignment/main.c std/error/main.c std/hashmap/main.c " + \
+          "std/alignment/main.c std/cli/main.c std/error/main.c " + \
+          "std/hashmap/main.c " + \
           "std/hashset/main.c " + \
           "std/linked-list/main.c " + \
           "std/option/main.c std/result/main.c std/tuple/main.c " + \

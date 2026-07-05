@@ -4,6 +4,7 @@
 #include "array/vector.h"
 #include "btreemap/btreemap.h"
 #include "btreeset/btreeset.h"
+#include "cli/cli.h"
 #include "error/error.h"
 #include "hashmap/hashmap.h"
 #include "hashset/hashset.h"
