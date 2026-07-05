@@ -1,23 +1,23 @@
 #include "option.h"
-#include <stdio.h>
 
-// 1) for each T you need, DEFINE_OPTION(T):
+#include <math.h>
+
 DEFINE_OPTION(int)
 DEFINE_OPTION(double)
 
 int main(void) {
-  // 2) now you can write Option(int) and OPTION_SOME/OPTION_NONE:
-  Option(int) a = OPTION_SOME(int, 42);
-  Option(int) b = OPTION_NONE(int);
+  Option(int) some = OPTION_SOME(int, 42);
+  Option(int) none = OPTION_NONE(int);
 
-  if (option_is_some(a))
-    printf("a = %d\n", unwrap_some(a));
+  assert(option_is_some(some));
+  assert(!option_is_none(some));
+  assert(unwrap_some(some) == 42);
+  assert(option_is_none(none));
+  assert(!option_is_some(none));
+  assert(unwrap_or(none, 7) == 7);
+  assert(unwrap_or(some, 7) == 42);
 
-  printf("b or 7 => %d\n", unwrap_or(b, 7));
-
-  // and you have a separate Option(double>):
-  Option(double) x = OPTION_SOME(double, 3.14);
-  printf("x = %.2f\n", unwrap_some(x));
-
-  return 0;
+  Option(double) value = OPTION_SOME(double, 3.14);
+  assert(option_is_some(value));
+  assert(fabs(unwrap_some(value) - 3.14) < 1e-12);
 }

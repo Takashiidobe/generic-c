@@ -16,7 +16,7 @@
 typedef struct {
   size_t len, cap;
   gc_cmp_fn cmp;
-  char data[]; // floor(cap) slots of [ key_bytes | val_bytes ]
+  max_align_t data[];
 } SMapHeader;
 
 // —— declare a sorted‐map variable for key type K and value type V ——
@@ -30,37 +30,40 @@ typedef struct {
 // —— helpers ——
 // number of elements
 #define sm_len(m) ((m).h ? (m).h->len : 0)
-#define _sm_align_up(n, a) (((n) + (a) - 1) & ~((size_t)(a) - 1))
+#define gc_sm_align_up(n, a) (((n) + (a) - 1) & ~((size_t)(a) - 1))
 // larger of the key/value alignments — the alignment of a whole slot
-#define _sm_align(m)                                                           \
+#define gc_sm_align(m)                                                           \
   (_Alignof(typeof((m)._key)) > _Alignof(typeof((m)._val))                     \
        ? _Alignof(typeof((m)._key))                                            \
        : _Alignof(typeof((m)._val)))
 // byte offset of the value within a slot: key size rounded up to val alignment
-#define _sm_valoff(m) _sm_align_up(sizeof((m)._key), _Alignof(typeof((m)._val)))
+#define gc_sm_valoff(m) gc_sm_align_up(sizeof((m)._key), _Alignof(typeof((m)._val)))
 // storage stride: value end rounded up to slot alignment, so every slot and
 // both of its fields stay aligned
-#define _sm_stride(m) _sm_align_up(_sm_valoff(m) + sizeof((m)._val), _sm_align(m))
+#define gc_sm_stride(m) gc_sm_align_up(gc_sm_valoff(m) + sizeof((m)._val), gc_sm_align(m))
 // raw byte pointer
-#define _sm_data(m) ((char *)(m).h->data)
+#define gc_sm_data(m) ((char *)(m).h->data)
 // pointer to key slot i
-#define _sm_keyptr(m, i)                                                       \
-  ((typeof((m)._key) *)(_sm_data(m) + (i) * _sm_stride(m)))
+#define gc_sm_keyptr(m, i)                                                       \
+  ((typeof((m)._key) *)(void *)(gc_sm_data(m) + (i) * gc_sm_stride(m)))
 // pointer to val slot i
-#define _sm_valptr(m, i)                                                       \
-  ((typeof((m)._val) *)(_sm_data(m) + (i) * _sm_stride(m) + _sm_valoff(m)))
-// three-way compare of key __k against slot i, honoring a custom comparator
-#define _sm_cmp(m, sh, k, i)                                                   \
-  ((sh)->cmp ? (sh)->cmp(&(k), _sm_keyptr(m, i), sizeof((m)._key))             \
-             : ((k) < *_sm_keyptr(m, i) ? -1                                   \
-                                        : ((k) > *_sm_keyptr(m, i) ? 1 : 0)))
+#define gc_sm_valptr(m, i)                                                       \
+  ((typeof((m)._val) *)(void *)(gc_sm_data(m) + (i) * gc_sm_stride(m) +        \
+                                gc_sm_valoff(m)))
+// three-way compare of key gc_k against slot i, honoring a custom comparator
+#define gc_sm_cmp(m, sh, k, i)                                                   \
+  ((sh)->cmp ? (sh)->cmp(&(k), gc_sm_keyptr(m, i), sizeof((m)._key))             \
+             : ((k) < *gc_sm_keyptr(m, i) ? -1                                   \
+                                        : ((k) > *gc_sm_keyptr(m, i) ? 1 : 0)))
 
 // —— initialize with a custom comparator (use gc_str_cmp for string keys) ——
 #define bmap_init_with(m, init_cap, cmp_fn)                                    \
   do {                                                                         \
-    size_t __stride = _sm_stride(m);                                           \
-    size_t __hdr = offsetof(SMapHeader, data);                                 \
-    (m).h = malloc(__hdr + __stride * (init_cap));                             \
+    static_assert(gc_sm_align(m) <= _Alignof(max_align_t),                      \
+                  "bmap entry alignment exceeds max_align_t");                 \
+    size_t gc_stride = gc_sm_stride(m);                                           \
+    size_t gc_hdr = offsetof(SMapHeader, data);                                 \
+    (m).h = malloc(gc_hdr + gc_stride * (init_cap));                             \
     assert((m).h);                                                             \
     (m).h->len = 0;                                                            \
     (m).h->cap = (init_cap);                                                   \
@@ -79,17 +82,17 @@ typedef struct {
   } while (0)
 
 // —— grow capacity when full ——
-#define _sm_ensure(m)                                                          \
+#define gc_sm_ensure(m)                                                          \
   do {                                                                         \
-    SMapHeader *__sh = (m).h;                                                  \
-    if (__sh->len >= __sh->cap) {                                              \
-      size_t __newc = __sh->cap ? __sh->cap * 2 : 1;                           \
-      size_t __stride = _sm_stride(m);                                         \
-      size_t __hdr = offsetof(SMapHeader, data);                               \
-      __sh = realloc(__sh, __hdr + __stride * __newc);                         \
-      assert(__sh);                                                            \
-      __sh->cap = __newc;                                                      \
-      (m).h = __sh;                                                            \
+    SMapHeader *gc_sh = (m).h;                                                  \
+    if (gc_sh->len >= gc_sh->cap) {                                              \
+      size_t gc_newc = gc_sh->cap ? gc_sh->cap * 2 : 1;                           \
+      size_t gc_stride = gc_sm_stride(m);                                         \
+      size_t gc_hdr = offsetof(SMapHeader, data);                               \
+      gc_sh = realloc(gc_sh, gc_hdr + gc_stride * gc_newc);                         \
+      assert(gc_sh);                                                            \
+      gc_sh->cap = gc_newc;                                                      \
+      (m).h = gc_sh;                                                            \
     }                                                                          \
   } while (0)
 
@@ -98,105 +101,105 @@ typedef struct {
   do {                                                                         \
     if (!(m).h)                                                                \
       bmap_init(m, 1);                                                         \
-    typeof((m)._key) __k = (key_expr);                                         \
-    typeof((m)._val) __v = (val_expr);                                         \
-    SMapHeader *__sh = (m).h;                                                  \
-    size_t __n = __sh->len, __lo = 0, __hi = __n;                              \
-    bool __found = false;                                                      \
+    typeof((m)._key) gc_k = (key_expr);                                         \
+    typeof((m)._val) gc_v = (val_expr);                                         \
+    SMapHeader *gc_sh = (m).h;                                                  \
+    size_t gc_n = gc_sh->len, gc_lo = 0, gc_hi = gc_n;                              \
+    bool gc_found = false;                                                      \
                                                                                \
     /* binary search */                                                        \
-    while (__lo < __hi) {                                                      \
-      size_t __mid = (__lo + __hi) >> 1;                                       \
-      int __c = _sm_cmp(m, __sh, __k, __mid);                                  \
-      if (__c < 0)                                                             \
-        __hi = __mid;                                                          \
-      else if (__c > 0)                                                        \
-        __lo = __mid + 1;                                                      \
+    while (gc_lo < gc_hi) {                                                      \
+      size_t gc_mid = (gc_lo + gc_hi) >> 1;                                       \
+      int gc_c = gc_sm_cmp(m, gc_sh, gc_k, gc_mid);                                  \
+      if (gc_c < 0)                                                             \
+        gc_hi = gc_mid;                                                          \
+      else if (gc_c > 0)                                                        \
+        gc_lo = gc_mid + 1;                                                      \
       else {                                                                   \
-        *_sm_valptr(m, __mid) = __v;                                           \
-        __found = true;                                                        \
+        *gc_sm_valptr(m, gc_mid) = gc_v;                                           \
+        gc_found = true;                                                        \
         break;                                                                 \
       }                                                                        \
     }                                                                          \
                                                                                \
-    if (!__found) {                                                            \
-      _sm_ensure(m);                                                           \
-      __sh = (m).h;                                                            \
-      __n = __sh->len;                                                         \
-      size_t __stride = _sm_stride(m);                                         \
-      char *__base = _sm_data(m);                                              \
+    if (!gc_found) {                                                            \
+      gc_sm_ensure(m);                                                           \
+      gc_sh = (m).h;                                                            \
+      gc_n = gc_sh->len;                                                         \
+      size_t gc_stride = gc_sm_stride(m);                                         \
+      char *gc_base = gc_sm_data(m);                                              \
                                                                                \
       /* shift right to make room */                                           \
-      memmove(__base + (__lo + 1) * __stride, __base + __lo * __stride,        \
-              (__n - __lo) * __stride);                                        \
+      memmove(gc_base + (gc_lo + 1) * gc_stride, gc_base + gc_lo * gc_stride,        \
+              (gc_n - gc_lo) * gc_stride);                                        \
                                                                                \
-      *_sm_keyptr(m, __lo) = __k;                                              \
-      *_sm_valptr(m, __lo) = __v;                                              \
-      __sh->len = __n + 1;                                                     \
+      *gc_sm_keyptr(m, gc_lo) = gc_k;                                              \
+      *gc_sm_valptr(m, gc_lo) = gc_v;                                              \
+      gc_sh->len = gc_n + 1;                                                     \
     }                                                                          \
   } while (0)
 
 // —— lookup: returns pointer to V or NULL ——
 #define bmap_get(m, key_expr)                                                  \
   ({                                                                           \
-    typeof((m)._val) *__res = NULL;                                            \
+    typeof((m)._val) *gc_res = NULL;                                            \
     if ((m).h) {                                                               \
-      typeof((m)._key) __k = (key_expr);                                       \
-      SMapHeader *__sh = (m).h;                                                \
-      size_t __lo = 0, __hi = __sh->len;                                       \
-      while (__lo < __hi) {                                                    \
-        size_t __mid = (__lo + __hi) >> 1;                                     \
-        int __c = _sm_cmp(m, __sh, __k, __mid);                                \
-        if (__c < 0)                                                           \
-          __hi = __mid;                                                        \
-        else if (__c > 0)                                                      \
-          __lo = __mid + 1;                                                    \
+      typeof((m)._key) gc_k = (key_expr);                                       \
+      SMapHeader *gc_sh = (m).h;                                                \
+      size_t gc_lo = 0, gc_hi = gc_sh->len;                                       \
+      while (gc_lo < gc_hi) {                                                    \
+        size_t gc_mid = (gc_lo + gc_hi) >> 1;                                     \
+        int gc_c = gc_sm_cmp(m, gc_sh, gc_k, gc_mid);                                \
+        if (gc_c < 0)                                                           \
+          gc_hi = gc_mid;                                                        \
+        else if (gc_c > 0)                                                      \
+          gc_lo = gc_mid + 1;                                                    \
         else {                                                                 \
-          __res = _sm_valptr(m, __mid);                                        \
+          gc_res = gc_sm_valptr(m, gc_mid);                                        \
           break;                                                               \
         }                                                                      \
       }                                                                        \
     }                                                                          \
-    __res;                                                                     \
+    gc_res;                                                                     \
   })
 
 // —— remove a key: returns 1 if it was present, 0 otherwise ——
 #define bmap_remove(m, key_expr)                                               \
   ({                                                                           \
-    int __removed = 0;                                                         \
+    int gc_removed = 0;                                                         \
     if ((m).h) {                                                               \
-      typeof((m)._key) __k = (key_expr);                                       \
-      SMapHeader *__sh = (m).h;                                                \
-      size_t __lo = 0, __hi = __sh->len;                                       \
-      while (__lo < __hi) {                                                    \
-        size_t __mid = (__lo + __hi) >> 1;                                     \
-        int __c = _sm_cmp(m, __sh, __k, __mid);                                \
-        if (__c < 0)                                                           \
-          __hi = __mid;                                                        \
-        else if (__c > 0)                                                      \
-          __lo = __mid + 1;                                                    \
+      typeof((m)._key) gc_k = (key_expr);                                       \
+      SMapHeader *gc_sh = (m).h;                                                \
+      size_t gc_lo = 0, gc_hi = gc_sh->len;                                       \
+      while (gc_lo < gc_hi) {                                                    \
+        size_t gc_mid = (gc_lo + gc_hi) >> 1;                                     \
+        int gc_c = gc_sm_cmp(m, gc_sh, gc_k, gc_mid);                                \
+        if (gc_c < 0)                                                           \
+          gc_hi = gc_mid;                                                        \
+        else if (gc_c > 0)                                                      \
+          gc_lo = gc_mid + 1;                                                    \
         else {                                                                 \
-          size_t __stride = _sm_stride(m);                                     \
-          char *__base = _sm_data(m);                                          \
-          memmove(__base + __mid * __stride,                                   \
-                  __base + (__mid + 1) * __stride,                             \
-                  (__sh->len - __mid - 1) * __stride);                         \
-          __sh->len--;                                                         \
-          __removed = 1;                                                       \
+          size_t gc_stride = gc_sm_stride(m);                                     \
+          char *gc_base = gc_sm_data(m);                                          \
+          memmove(gc_base + gc_mid * gc_stride,                                   \
+                  gc_base + (gc_mid + 1) * gc_stride,                             \
+                  (gc_sh->len - gc_mid - 1) * gc_stride);                         \
+          gc_sh->len--;                                                         \
+          gc_removed = 1;                                                       \
           break;                                                               \
         }                                                                      \
       }                                                                        \
     }                                                                          \
-    __removed;                                                                 \
+    gc_removed;                                                                 \
   })
 
 // —— iterate in sorted order ——
 #define bmap_for(m, it_k, it_v)                                                \
-  for (size_t __i = 0, __n = sm_len(m); __i < __n; ++__i)                      \
-    for (int __once1 = 1; __once1; __once1 = 0)                                \
-      for (typeof((m)._key) it_k = *_sm_keyptr(m, __i); __once1; __once1 = 0)  \
-        for (int __once2 = 1; __once2; __once2 = 0)                            \
-          for (typeof((m)._val) it_v = *_sm_valptr(m, __i); __once2;           \
-               __once2 = 0)
+  for (size_t gc_i = 0, gc_n = sm_len(m); gc_i < gc_n; ++gc_i)                      \
+    for (int gc_once1 = 1; gc_once1; gc_once1 = 0)                                \
+      for (typeof((m)._key) it_k = *gc_sm_keyptr(m, gc_i); gc_once1; gc_once1 = 0)  \
+        for (int gc_once2 = 1; gc_once2; gc_once2 = 0)                            \
+          for (typeof((m)._val) it_v = *gc_sm_valptr(m, gc_i); gc_once2;           \
+               gc_once2 = 0)
 
 #endif // btreemap_h

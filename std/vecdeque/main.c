@@ -1,43 +1,34 @@
 #include "vecdeque.h"
-#include <stdio.h>
-#include <stdlib.h>
 
 int main(void) {
-  // Create an empty deque of int
-  Deque(int) dq = NULL;
+  Deque(int) deque = NULL;
+  assert(dq_len(deque) == 0);
+  assert(dq_cap(deque) == 0);
 
-  // Push back 1, 2, 3
-  dq_push_back(dq, 1);
-  dq_push_back(dq, 2);
-  dq_push_back(dq, 3);
-  printf("After push_back: len=%zu, cap=%zu\n", dq_len(dq), dq_cap(dq));
-  printf("Contents: ");
-  for (size_t i = 0; i < dq_len(dq); ++i) {
-    printf("%d ", dq_get(dq, i));
-  }
-  printf("\n");
+  dq_push_back(deque, 1);
+  dq_push_back(deque, 2);
+  dq_push_back(deque, 3);
+  assert(dq_len(deque) == 3);
+  assert(dq_cap(deque) >= 3);
 
-  // Push front 0, -1
-  dq_push_front(dq, 0);
-  dq_push_front(dq, -1);
-  printf("After push_front: len=%zu, cap=%zu\n", dq_len(dq), dq_cap(dq));
-  printf("Contents: ");
-  for (size_t i = 0; i < dq_len(dq); ++i) {
-    printf("%d ", dq_get(dq, i));
-  }
-  printf("\n");
+  dq_push_front(deque, 0);
+  dq_push_front(deque, -1);
+  assert(dq_len(deque) == 5);
 
-  // Pop front and back
-  int front = dq_pop_front(dq);
-  int back = dq_pop_back(dq);
-  printf("Popped front=%d, back=%d\n", front, back);
-  printf("After pops: len=%zu\n", dq_len(dq));
-  printf("Contents via deque_for: ");
-  deque_for(it, dq) { printf("%d ", *it); }
-  printf("\n");
+  const int expected[] = {-1, 0, 1, 2, 3};
+  for (size_t i = 0; i < dq_len(deque); ++i)
+    assert(dq_get(deque, i) == expected[i]);
 
-  // Free deque
-  dq_free(dq);
-  printf("Deque freed, len=%zu\n", dq_len(dq));
-  return 0;
+  assert(dq_pop_front(deque) == -1);
+  assert(dq_pop_back(deque) == 3);
+  assert(dq_len(deque) == 3);
+
+  const int remaining[] = {0, 1, 2};
+  size_t index = 0;
+  deque_for(item, deque) { assert(*item == remaining[index++]); }
+  assert(index == 3);
+
+  dq_free(deque);
+  assert(deque == NULL);
+  assert(dq_len(deque) == 0);
 }

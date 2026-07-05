@@ -12,7 +12,7 @@
 // —— internal node type (chaining) ——
 typedef struct SNode {
   struct SNode *next;
-  char data[]; // key bytes
+  max_align_t data[];
 } SNode;
 
 // —— core set metadata ——
@@ -36,6 +36,8 @@ typedef struct {
 // use gc_str_hash / gc_str_eq for `const char *` elements.
 #define set_init_with(s, n_buckets, hash_fn, eq_fn)                            \
   do {                                                                         \
+    static_assert(_Alignof(typeof((s)._key)) <= _Alignof(max_align_t),          \
+                  "set element alignment exceeds max_align_t");                \
     (s).h = malloc(sizeof(HashSet));                                           \
     assert((s).h);                                                             \
     (s).h->key_size = sizeof((s)._key);                                        \
@@ -55,7 +57,7 @@ typedef struct {
 #define set_len(s) ((s).h ? (s).h->count : 0)
 
 // —— grow + rehash once the load factor passes 0.75 ——
-static inline void _hashset_maybe_grow(HashSet *h) {
+static inline void gc_hashset_maybe_grow(HashSet *h) {
   if (h->count * 4 < h->bucket_count * 3)
     return;
   size_t nc = h->bucket_count ? h->bucket_count * 2 : 1;
@@ -96,7 +98,7 @@ static inline void _hashset_maybe_grow(HashSet *h) {
 // —— add an element to the set (no-op if already present) ——
 #define set_add(s, key_expr)                                                   \
   do {                                                                         \
-    _hashset_maybe_grow((s).h);                                                \
+    gc_hashset_maybe_grow((s).h);                                                \
     HashSet *_hs = (s).h;                                                      \
     typeof((s)._key) _key = (key_expr);                                        \
     size_t _b = _hs->hash(&_key, _hs->key_size) % _hs->bucket_count;           \

@@ -12,7 +12,7 @@
 // —— internal node type (chaining) ——
 typedef struct HNode {
   struct HNode *next;
-  char data[]; // key bytes followed by value bytes
+  max_align_t data[];
 } HNode;
 
 // —— core map metadata ——
@@ -25,7 +25,7 @@ typedef struct {
   HNode **buckets;
 } HashMap;
 
-#define _hm_align_up(n, a) (((n) + (a) - 1) & ~((size_t)(a) - 1))
+#define gc_hm_align_up(n, a) (((n) + (a) - 1) & ~((size_t)(a) - 1))
 
 // —— declare a map variable with key type K and value type V ——
 #define Map(K, V)                                                              \
@@ -39,12 +39,16 @@ typedef struct {
 // use gc_str_hash / gc_str_eq for `const char *` keys.
 #define map_init_with(m, n_buckets, hash_fn, eq_fn)                            \
   do {                                                                         \
+    static_assert(_Alignof(typeof((m)._key)) <= _Alignof(max_align_t),          \
+                  "map key alignment exceeds max_align_t");                    \
+    static_assert(_Alignof(typeof((m)._val)) <= _Alignof(max_align_t),          \
+                  "map value alignment exceeds max_align_t");                  \
     (m).h = malloc(sizeof(HashMap));                                           \
     assert((m).h);                                                             \
     (m).h->key_size = sizeof((m)._key);                                        \
     (m).h->val_size = sizeof((m)._val);                                        \
     (m).h->val_off =                                                           \
-        _hm_align_up(sizeof((m)._key), _Alignof(typeof((m)._val)));            \
+        gc_hm_align_up(sizeof((m)._key), _Alignof(typeof((m)._val)));            \
     (m).h->bucket_count = (n_buckets);                                         \
     (m).h->count = 0;                                                          \
     (m).h->hash = (hash_fn);                                                   \
@@ -61,7 +65,7 @@ typedef struct {
 #define map_len(m) ((m).h ? (m).h->count : 0)
 
 // —— grow + rehash once the load factor passes 0.75 ——
-static inline void _hashmap_maybe_grow(HashMap *h) {
+static inline void gc_hashmap_maybe_grow(HashMap *h) {
   if (h->count * 4 < h->bucket_count * 3)
     return;
   size_t nc = h->bucket_count ? h->bucket_count * 2 : 1;
@@ -102,7 +106,7 @@ static inline void _hashmap_maybe_grow(HashMap *h) {
 // —— insert or overwrite a (key, val) pair ——
 #define map_put(m, key_expr, val_expr)                                         \
   do {                                                                         \
-    _hashmap_maybe_grow((m).h);                                                \
+    gc_hashmap_maybe_grow((m).h);                                                \
     HashMap *_ht = (m).h;                                                      \
     typeof((m)._key) _key = (key_expr);                                        \
     typeof((m)._val) _val = (val_expr);                                        \
@@ -112,7 +116,8 @@ static inline void _hashmap_maybe_grow(HashMap *h) {
     int _found = 0;                                                            \
     for (_n = *_buck; _n; _n = _n->next) {                                     \
       if (_ht->eq(_n->data, &_key, _ht->key_size)) {                           \
-        memcpy(_n->data + _ht->val_off, &_val, _ht->val_size);                 \
+        memcpy((unsigned char *)_n->data + _ht->val_off, &_val,                \
+               _ht->val_size);                                                 \
         _found = 1;                                                            \
         break;                                                                 \
       }                                                                        \
@@ -121,7 +126,8 @@ static inline void _hashmap_maybe_grow(HashMap *h) {
       HNode *_new = malloc(sizeof(HNode) + _ht->val_off + _ht->val_size);      \
       assert(_new);                                                            \
       memcpy(_new->data, &_key, _ht->key_size);                                \
-      memcpy(_new->data + _ht->val_off, &_val, _ht->val_size);                 \
+      memcpy((unsigned char *)_new->data + _ht->val_off, &_val,                \
+             _ht->val_size);                                                   \
       _new->next = *_buck;                                                     \
       *_buck = _new;                                                           \
       _ht->count++;                                                            \
@@ -138,7 +144,8 @@ static inline void _hashmap_maybe_grow(HashMap *h) {
     typeof((m)._val) *_out = NULL;                                             \
     while (_n) {                                                               \
       if (_ht->eq(_n->data, &_key, _ht->key_size)) {                           \
-        _out = (typeof((m)._val) *)(_n->data + _ht->val_off);                  \
+        _out = (typeof((m)._val) *)(void *)((unsigned char *)_n->data +        \
+                                            _ht->val_off);                     \
         break;                                                                 \
       }                                                                        \
       _n = _n->next;                                                           \
@@ -177,7 +184,8 @@ static inline void _hashmap_maybe_grow(HashMap *h) {
              _once_k = 0)                                                      \
           for (int _once_v = 1; _once_v; _once_v = 0)                          \
             for (typeof((m)._val) it_v =                                       \
-                     *(typeof((m)._val) *)(_n->data + (m).h->val_off);         \
+                     *(typeof((m)._val) *)(void *)                             \
+                         ((unsigned char *)_n->data + (m).h->val_off);         \
                  _once_v; _once_v = 0)
 
 // —— iterate keys only ——
@@ -194,7 +202,8 @@ static inline void _hashmap_maybe_grow(HashMap *h) {
     for (HNode *_n = (m).h->buckets[_bi]; _n; _n = _n->next)                   \
       for (int _once_v = 1; _once_v; _once_v = 0)                              \
         for (typeof((m)._val) it_v =                                           \
-                 *(typeof((m)._val) *)(_n->data + (m).h->val_off);             \
+                 *(typeof((m)._val) *)(void *)                                 \
+                     ((unsigned char *)_n->data + (m).h->val_off);             \
              _once_v; _once_v = 0)
 
 #endif // HASHMAP_H

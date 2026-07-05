@@ -10,68 +10,73 @@
 typedef struct {
   size_t length;
   size_t capacity;
-  char data[]; /* flexible array member */
+  max_align_t data[];
 } VecHeader;
 
 /*–– the “handle” type for your vector ––*/
 #define Vec(type) type *
 
 /*–– get pointer to header from the data pointer ––*/
-#define _vec_header(a) ((VecHeader *)((char *)(a) - offsetof(VecHeader, data)))
+#define gc_vec_header(a)                                                       \
+  ((VecHeader *)(void *)((char *)(a) - offsetof(VecHeader, data)))
 
 /*–– length and capacity ––*/
-#define vec_len(a) ((a) ? _vec_header(a)->length : 0)
-#define vec_cap(a) ((a) ? _vec_header(a)->capacity : 0)
+#define vec_len(a) ((a) ? gc_vec_header(a)->length : 0)
+#define vec_cap(a) ((a) ? gc_vec_header(a)->capacity : 0)
 
 /*–– free the array ––*/
 #define vec_free(a)                                                            \
   do {                                                                         \
     if (a) {                                                                   \
-      free(_vec_header(a));                                                    \
+      free(gc_vec_header(a));                                                    \
       (a) = NULL;                                                              \
     }                                                                          \
   } while (0)
 
 #define vec_reserve(a, n)                                                      \
   do {                                                                         \
+    static_assert(_Alignof(typeof(*(a))) <= _Alignof(max_align_t),              \
+                  "vector element alignment exceeds max_align_t");             \
     size_t _old_len = vec_len(a);                                              \
     if ((n) > vec_cap(a)) {                                                    \
-      /* grow capacity up to at least n, but _vec_grow will also add to length \
+      /* grow capacity up to at least n, but gc_vec_grow will also add to length \
        */                                                                      \
-      _vec_grow((void **)&(a), (n) - _old_len, sizeof *(a));                   \
+      gc_vec_grow((void **)&(a), (n) - _old_len, sizeof *(a));                   \
       /* undo the accidental length bump */                                    \
-      _vec_header(a)->length = _old_len;                                       \
+      gc_vec_header(a)->length = _old_len;                                       \
     }                                                                          \
   } while (0)
 
 /*–– append one element ––*/
 #define vec_push(a, val)                                                       \
   do {                                                                         \
+    static_assert(_Alignof(typeof(*(a))) <= _Alignof(max_align_t),              \
+                  "vector element alignment exceeds max_align_t");             \
     /* remember old length */                                                  \
     size_t _old_len = vec_len(a);                                              \
     /* grow by exactly one slot (this bumps length by +1) */                   \
-    _vec_grow((void **)&(a), 1, sizeof *(a));                                  \
+    gc_vec_grow((void **)&(a), 1, sizeof *(a));                                  \
     /* store into the newly-allocated slot */                                  \
     (a)[_old_len] = (val);                                                     \
   } while (0)
 
 /*–– remove & return last element ––*/
-#define vec_pop(a) (assert(vec_len(a) > 0), (a)[--_vec_header(a)->length])
+#define vec_pop(a) (assert(vec_len(a) > 0), (a)[--gc_vec_header(a)->length])
 
 /*–– get the element at index `idx` (with bounds‐check) ––*/
 #define vec_get(a, idx)                                                        \
   ({                                                                           \
-    size_t __i = (idx);                                                        \
+    size_t gc_i = (idx);                                                        \
     /* must have been initialized and in‐bounds */                             \
-    assert((a) && __i < vec_len(a));                                           \
-    (a)[__i];                                                                  \
+    assert((a) && gc_i < vec_len(a));                                           \
+    (a)[gc_i];                                                                  \
   })
 
 /*–– set length to 0 (does not free memory) ––*/
 #define vec_clear(a)                                                           \
   do {                                                                         \
     if (a)                                                                     \
-      _vec_header(a)->length = 0;                                              \
+      gc_vec_header(a)->length = 0;                                              \
   } while (0)
 
 /*–– simple foreach ––*/
@@ -84,8 +89,8 @@ typedef struct {
     for (__typeof__((a)[0]) *item = &(a)[idx]; item; item = NULL)
 
 /*–– internal grow routine ––*/
-static inline void _vec_grow(void **arr, size_t increment, size_t elem_size) {
-  VecHeader *h = *arr ? _vec_header(*arr) : NULL;
+static inline void gc_vec_grow(void **arr, size_t increment, size_t elem_size) {
+  VecHeader *h = *arr ? gc_vec_header(*arr) : NULL;
   size_t new_len = (h ? h->length : 0) + increment;
   size_t new_cap = h ? h->capacity : 0;
 
@@ -112,6 +117,8 @@ static inline void _vec_grow(void **arr, size_t increment, size_t elem_size) {
 
 #define vec_init(a, ...)                                                       \
   do {                                                                         \
+    static_assert(_Alignof(typeof(*(a))) <= _Alignof(max_align_t),              \
+                  "vector element alignment exceeds max_align_t");             \
     /* count from sizeof on the array literal itself (unevaluated, no decay);  \
        _vec_src decays to a pointer only for the memcpy source */              \
     size_t _vec_n = sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]);            \

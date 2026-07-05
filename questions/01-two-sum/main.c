@@ -1,17 +1,17 @@
 #include "../../std/all.h"
 
-DEFINE_TUPLE2(IntPair, int, int);
-DEFINE_OPTION(IntPair);
+DEFINE_TUPLE2(IndexPair, size_t, size_t)
+DEFINE_OPTION(IndexPair)
 
-static Option(IntPair) two_sum(Vec(int) nums, int target) {
-  Map(int, int) m;
+static Option(IndexPair) two_sum(Vec(int) nums, int target) {
+  Map(int, size_t) m;
   map_init(m, 16);
 
-  Option(IntPair) answer = OPTION_NONE(IntPair);
+  Option(IndexPair) answer = OPTION_NONE(IndexPair);
   vec_enum(i, num, nums) {
-    int *entry = map_get(m, target - *num);
+    size_t *entry = map_get(m, target - *num);
     if (entry) {
-      answer = OPTION_SOME(IntPair, MAKE_TUPLE2(IntPair, *entry, i));
+      answer = OPTION_SOME(IndexPair, MAKE_TUPLE2(IndexPair, *entry, i));
       break;
     }
     map_put(m, *num, i);
@@ -28,7 +28,8 @@ int main(void) {
 
     auto target = 8;
     auto answer = two_sum(nums, target);
-    ASSERT_EQ(answer.as.some, MAKE_TUPLE2(IntPair, 0, 1));
+    ASSERT(option_is_some(answer));
+    ASSERT_EQ(answer.as.some, MAKE_TUPLE2(IndexPair, 0, 1));
     vec_free(nums);
   }
 
@@ -38,7 +39,17 @@ int main(void) {
 
     auto target = 9;
     auto answer = two_sum(nums, target);
-    ASSERT_EQ(answer.as.some, MAKE_TUPLE2(IntPair, 0, 1));
+    ASSERT(option_is_some(answer));
+    ASSERT_EQ(answer.as.some, MAKE_TUPLE2(IndexPair, 0, 1));
+    vec_free(nums);
+  }
+
+  TEST("test without a solution") {
+    Vec(int) nums;
+    vec_init(nums, (int[]){1, 2, 3});
+
+    auto answer = two_sum(nums, 10);
+    ASSERT(option_is_none(answer));
     vec_free(nums);
   }
 

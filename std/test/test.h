@@ -6,8 +6,8 @@
 #include <string.h>
 
 // ——— global counters (one per translation unit) ———
-static int _tests_run = 0;
-static int _tests_failed = 0;
+static int gc_tests_run = 0;
+static int gc_tests_failed = 0;
 
 // ——— begin a new test case ———
 // Usage:
@@ -16,7 +16,7 @@ static int _tests_failed = 0;
 //     ASSERT_EQ(sum, 5);
 //   }
 #define TEST(desc)                                                             \
-  for (int _run = (_tests_run++, printf("[TEST] %s\n", desc), 1); _run;        \
+  for (int _run = (gc_tests_run++, printf("[TEST] %s\n", desc), 1); _run;        \
        _run = 0)
 
 // ——— basic assertion ———
@@ -26,7 +26,7 @@ static int _tests_failed = 0;
     if (!(expr)) {                                                             \
       fprintf(stderr, "%s:%d: Assertion failed: %s\n", __FILE__, __LINE__,     \
               #expr);                                                          \
-      _tests_failed++;                                                         \
+      gc_tests_failed++;                                                         \
     }                                                                          \
   } while (0)
 
@@ -39,7 +39,7 @@ static int _tests_failed = 0;
     if (strcmp(_a, _b) != 0) {                                                 \
       fprintf(stderr, "%s:%d: ASSERT_STR_EQ failed: \"%s\" != \"%s\"\n",       \
               __FILE__, __LINE__, _a, _b);                                     \
-      _tests_failed++;                                                         \
+      gc_tests_failed++;                                                         \
     }                                                                          \
   } while (0)
 
@@ -53,7 +53,7 @@ static int _tests_failed = 0;
     if (memcmp(&_a, &_b, sizeof _a) != 0) {                                    \
       fprintf(stderr, "%s:%d: ASSERT_EQ failed: %s == %s (bytes differ)\n",    \
               __FILE__, __LINE__, #a, #b);                                     \
-      _tests_failed++;                                                         \
+      gc_tests_failed++;                                                         \
     }                                                                          \
   } while (0)
 
@@ -66,15 +66,15 @@ static int _tests_failed = 0;
     if (!(_a != _b)) {                                                         \
       fprintf(stderr, "%s:%d: ASSERT_NE failed: %s != %s (both %lld)\n",       \
               __FILE__, __LINE__, #a, #b, (long long)_a);                      \
-      _tests_failed++;                                                         \
+      gc_tests_failed++;                                                         \
     }                                                                          \
   } while (0)
 
 // ——— print a summary and exit non-zero on failure ———
 #define TEST_SUMMARY()                                                         \
   do {                                                                         \
-    printf("Tests run: %d; Failures: %d\n", _tests_run, _tests_failed);        \
-    if (_tests_failed)                                                         \
+    printf("Tests run: %d; Failures: %d\n", gc_tests_run, gc_tests_failed);        \
+    if (gc_tests_failed)                                                         \
       exit(EXIT_FAILURE);                                                      \
   } while (0)
 

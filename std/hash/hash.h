@@ -4,7 +4,7 @@
 #include <string.h>
 
 // —— FNV-1a hash over raw bytes ——
-static inline size_t _hash_bytes(const void *data, size_t len) {
+static inline size_t gc_hash_bytes(const void *data, size_t len) {
   size_t hash = (size_t)2166136261u;
   const unsigned char *p = data;
   for (size_t i = 0; i < len; i++) {
@@ -24,7 +24,7 @@ typedef int (*gc_cmp_fn)(const void *a, const void *b, size_t key_size);
 
 // default: hash / compare the raw key bytes (correct for scalar keys)
 static inline size_t gc_bytes_hash(const void *key, size_t key_size) {
-  return _hash_bytes(key, key_size);
+  return gc_hash_bytes(key, key_size);
 }
 static inline int gc_bytes_eq(const void *a, const void *b, size_t key_size) {
   return memcmp(a, b, key_size) == 0;
@@ -34,7 +34,7 @@ static inline int gc_bytes_eq(const void *a, const void *b, size_t key_size) {
 static inline size_t gc_str_hash(const void *key, size_t key_size) {
   (void)key_size;
   const char *s = *(const char *const *)key;
-  return _hash_bytes(s, strlen(s));
+  return gc_hash_bytes(s, strlen(s));
 }
 static inline int gc_str_eq(const void *a, const void *b, size_t key_size) {
   (void)key_size;

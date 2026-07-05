@@ -1,26 +1,26 @@
 #include "result.h"
-#include <stdio.h>
-#include <stdlib.h> // for strtol
+
+#include <stdlib.h>
+#include <string.h>
 
 DEFINE_RESULT(ParseIntResult, int, const char *);
 
-// crosses a function boundary: the value returned here is assigned to a
-// ParseIntResult in main, which only works because both share the named type.
-static ParseIntResult parse_int(const char *s) {
+static ParseIntResult parse_int(const char *string) {
   char *end;
-  long val = strtol(s, &end, 10);
+  long value = strtol(string, &end, 10);
   if (*end != '\0')
     return RESULT_ERR(ParseIntResult, "invalid integer");
-  return RESULT_OK(ParseIntResult, (int)val);
+  return RESULT_OK(ParseIntResult, (int)value);
 }
 
 int main(void) {
   ParseIntResult ok = parse_int("123");
-  if (result_is_ok(ok))
-    printf("Parsed: %d\n", unwrap(ok));
+  assert(result_is_ok(ok));
+  assert(!result_is_err(ok));
+  assert(unwrap(ok) == 123);
 
   ParseIntResult bad = parse_int("12x");
-  if (result_is_err(bad))
-    printf("Error: %s\n", unwrap_err(bad));
-  return 0;
+  assert(result_is_err(bad));
+  assert(!result_is_ok(bad));
+  assert(strcmp(unwrap_err(bad), "invalid integer") == 0);
 }

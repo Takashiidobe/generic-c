@@ -1,36 +1,39 @@
 #include "hashset.h"
-#include <stdio.h>
 
 int main(void) {
-  Set(int) s;
-  set_init(s, 32);
+  Set(int) set;
+  set_init(set, 32);
 
-  set_add(s, 42);
-  set_add(s, 7);
-  set_add(s, 42); // duplicate, no effect
+  set_add(set, 42);
+  set_add(set, 7);
+  set_add(set, 42);
 
-  printf("Contains 7?  %d\n", set_contains(s, 7));
-  printf("Contains 99? %d\n", set_contains(s, 99));
+  assert(set_contains(set, 7));
+  assert(!set_contains(set, 99));
+  assert(set_len(set) == 2);
+  assert(set_remove(set, 7));
+  assert(!set_remove(set, 7));
+  assert(set_len(set) == 1);
 
-  printf("len = %zu\n", set_len(s));
-  printf("remove 7 -> %d\n", set_remove(s, 7));
-  printf("remove 7 again -> %d\n", set_remove(s, 7));
-  printf("len = %zu\n", set_len(s));
+  size_t count = 0;
+  set_for(set, value) {
+    assert(value == 42);
+    ++count;
+  }
+  assert(count == 1);
+  set_free(set);
 
-  printf("All elements:\n");
-  set_for(s, x) { printf("  %d\n", x); }
-
-  set_free(s);
-
-  // string elements compared by content, plus growth past initial buckets
   Set(const char *) names;
   set_init_with(names, 2, gc_str_hash, gc_str_eq);
   set_add(names, "alice");
   set_add(names, "bob");
-  set_add(names, "alice"); // duplicate by content, no effect
+  set_add(names, "alice");
   set_add(names, "carol");
-  printf("names: contains bob? %d, len = %zu\n", set_contains(names, "bob"),
-         set_len(names));
+
+  assert(set_contains(names, "alice"));
+  assert(set_contains(names, "bob"));
+  assert(set_contains(names, "carol"));
+  assert(!set_contains(names, "dave"));
+  assert(set_len(names) == 3);
   set_free(names);
-  return 0;
 }

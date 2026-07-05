@@ -8,7 +8,7 @@
 // ─── Node definition (doubly linked, generic payload) ────────────────────
 typedef struct ListNode {
   struct ListNode *prev, *next;
-  char data[]; // flexible array for payload
+  max_align_t data[];
 } ListNode;
 
 // ─── List container type for T ──────────────────────────────────────────
@@ -26,7 +26,7 @@ typedef struct ListNode {
   } while (0)
 
 // ─── allocate and insert at front ───────────────────────────────────────
-static inline void *_list_alloc_front(ListNode **head, ListNode **tail,
+static inline void *gc_list_alloc_front(ListNode **head, ListNode **tail,
                                       size_t data_size) {
   ListNode *node = malloc(sizeof *node + data_size);
   assert(node);
@@ -41,7 +41,7 @@ static inline void *_list_alloc_front(ListNode **head, ListNode **tail,
 }
 
 // ─── allocate and insert at back ────────────────────────────────────────
-static inline void *_list_alloc_back(ListNode **head, ListNode **tail,
+static inline void *gc_list_alloc_back(ListNode **head, ListNode **tail,
                                      size_t data_size) {
   ListNode *node = malloc(sizeof *node + data_size);
   assert(node);
@@ -71,13 +71,21 @@ static inline void *_list_alloc_back(ListNode **head, ListNode **tail,
 
 // ─── allocate in-place at front ─────────────────────────────────────────
 #define list_alloc_front(lst)                                                  \
-  (__typeof__((lst)->payload))_list_alloc_front(                               \
-      &((lst)->head), &((lst)->tail), sizeof *(lst)->payload)
+  ({                                                                           \
+    static_assert(_Alignof(typeof(*(lst)->payload)) <= _Alignof(max_align_t),   \
+                  "list element alignment exceeds max_align_t");               \
+    (__typeof__((lst)->payload))gc_list_alloc_front(                            \
+        &((lst)->head), &((lst)->tail), sizeof *(lst)->payload);                \
+  })
 
 // ─── allocate in-place at back ──────────────────────────────────────────
 #define list_alloc_back(lst)                                                   \
-  (__typeof__((lst)->payload))_list_alloc_back(&((lst)->head), &((lst)->tail), \
-                                               sizeof *(lst)->payload)
+  ({                                                                           \
+    static_assert(_Alignof(typeof(*(lst)->payload)) <= _Alignof(max_align_t),   \
+                  "list element alignment exceeds max_align_t");               \
+    (__typeof__((lst)->payload))gc_list_alloc_back(                             \
+        &((lst)->head), &((lst)->tail), sizeof *(lst)->payload);                \
+  })
 
 // ─── pop from front (returns T) ──────────────────────────────────────────
 #define list_pop_front(lst)                                                    \
@@ -125,7 +133,8 @@ static inline void *_list_alloc_back(ListNode **head, ListNode **tail,
                         : NULL);                                               \
        it != NULL;                                                             \
        it = (__extension__({                                                   \
-         ListNode *_n = (ListNode *)((char *)it - offsetof(ListNode, data));   \
+         ListNode *_n =                                                       \
+             (ListNode *)(void *)((char *)it - offsetof(ListNode, data));     \
          _n->next ? (__typeof__((lst)->payload))_n->next->data : NULL;         \
        })))
 
@@ -136,19 +145,23 @@ static inline void *_list_alloc_back(ListNode **head, ListNode **tail,
                         : NULL);                                               \
        it != NULL;                                                             \
        it = (__extension__({                                                   \
-         ListNode *_n = (ListNode *)((char *)it - offsetof(ListNode, data));   \
+         ListNode *_n =                                                       \
+             (ListNode *)(void *)((char *)it - offsetof(ListNode, data));     \
          _n->prev ? (__typeof__((lst)->payload))_n->prev->data : NULL;         \
        })))
 
 // ─── clear all nodes ─────────────────────────────────────────────────────
-static inline void list_clear(void *lst, size_t offset) {
-  char *base = (char *)lst;
-  ListNode *n = *(ListNode **)(base + offset);
+static inline void gc_list_clear(ListNode **head, ListNode **tail) {
+  ListNode *n = *head;
   while (n) {
     ListNode *nx = n->next;
     free(n);
     n = nx;
   }
+  *head = NULL;
+  *tail = NULL;
 }
+
+#define list_clear(lst) gc_list_clear(&((lst)->head), &((lst)->tail))
 
 #endif // LINKED_LIST_H

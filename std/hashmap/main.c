@@ -1,58 +1,63 @@
 #include "hashmap.h"
+
 #include <stdio.h>
+#include <string.h>
 
 typedef struct {
   const char *value;
 } Foo;
 
-typedef struct {
-  int value;
-} Bar;
-
 int main(void) {
-  Map(int, Foo) m;
-  map_init(m, 8);
+  Map(int, Foo) map;
+  map_init(map, 8);
 
-  map_put(m, 1, (Foo){.value = "hi"});
-  map_put(m, 2, (Foo){.value = "value"});
-  map_put(m, 3, (Foo){.value = "next"});
-  map_put(m, 2, (Foo){.value = "other"});
-  // compiler error:
-  // map_put(m, 2, (Bar){.value = 200});
+  map_put(map, 1, (Foo){.value = "hi"});
+  map_put(map, 2, (Foo){.value = "value"});
+  map_put(map, 3, (Foo){.value = "next"});
+  map_put(map, 2, (Foo){.value = "other"});
 
-  Foo *f2 = map_get(m, 2);
-  if (f2)
-    printf("Key 2 -> %s\n", f2->value);
-  if (!map_get(m, 4))
-    printf("Key 4 not found\n");
+  assert(strcmp(map_get(map, 2)->value, "other") == 0);
+  assert(map_get(map, 4) == NULL);
+  assert(map_len(map) == 3);
+  assert(map_remove(map, 2));
+  assert(!map_remove(map, 2));
+  assert(map_len(map) == 2);
 
-  printf("len = %zu\n", map_len(m));
-  printf("remove 2 -> %d\n", map_remove(m, 2));
-  printf("remove 2 again -> %d\n", map_remove(m, 2));
-  printf("len = %zu\n", map_len(m));
-
-  printf("All (key,value) pairs:\n");
-  map_for(m, k, v) { printf("  %d -> %s\n", k, v.value); }
-
-  printf("Keys:\n");
-  map_keys(m, k) { printf("  %d\n", k); }
-
-  printf("Values:\n");
-  map_vals(m, val) { printf("  %s\n", val.value); }
-
-  map_free(m);
-
-  // string keys compared by content, plus growth past the initial bucket count
-  Map(const char *, int) s;
-  map_init_with(s, 2, gc_str_hash, gc_str_eq);
-  for (int i = 0; i < 8; ++i) {
-    char *key = malloc(8);
-    snprintf(key, 8, "k%d", i);
-    map_put(s, key, i * 10);
+  size_t pairs = 0;
+  map_for(map, key, value) {
+    assert((key == 1 && strcmp(value.value, "hi") == 0) ||
+           (key == 3 && strcmp(value.value, "next") == 0));
+    ++pairs;
   }
-  int *v3 = map_get(s, "k3");
-  printf("k3 -> %d, len = %zu\n", v3 ? *v3 : -1, map_len(s));
-  map_keys(s, k) { free((void *)k); }
-  map_free(s);
-  return 0;
+  assert(pairs == 2);
+
+  size_t keys = 0;
+  map_keys(map, key) {
+    assert(key == 1 || key == 3);
+    ++keys;
+  }
+  assert(keys == 2);
+
+  size_t values = 0;
+  map_vals(map, value) {
+    assert(strcmp(value.value, "hi") == 0 ||
+           strcmp(value.value, "next") == 0);
+    ++values;
+  }
+  assert(values == 2);
+  map_free(map);
+
+  Map(const char *, int) strings;
+  map_init_with(strings, 2, gc_str_hash, gc_str_eq);
+  char string_keys[8][8];
+  for (int i = 0; i < 8; ++i) {
+    snprintf(string_keys[i], sizeof string_keys[i], "k%d", i);
+    map_put(strings, string_keys[i], i * 10);
+  }
+  assert(map_len(strings) == 8);
+  for (int i = 0; i < 8; ++i) {
+    int *value = map_get(strings, string_keys[i]);
+    assert(value && *value == i * 10);
+  }
+  map_free(strings);
 }

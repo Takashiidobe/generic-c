@@ -20,7 +20,8 @@ warn   := "-Wall -Wextra -Werror -Wundef -Wvla -Wpointer-arith " + \
 
 # every runnable translation unit
 mains  := "std/array/main.c std/btreemap/main.c std/btreeset/main.c " + \
-          "std/hashmap/main.c std/hashset/main.c std/linked-list/main.c " + \
+          "std/alignment/main.c std/hashmap/main.c std/hashset/main.c " + \
+          "std/linked-list/main.c " + \
           "std/option/main.c std/result/main.c std/tuple/main.c " + \
           "std/vecdeque/main.c questions/01-two-sum/main.c"
 
@@ -68,7 +69,7 @@ lint:
           -Wno-gnu-flexible-array-initializer -Wno-gnu-alignof-expression \
           -Wno-padded -Wno-unsafe-buffer-usage -Wno-covered-switch-default \
           -Wno-pre-c23-compat -Wno-pre-c11-compat -Wno-pre-c2x-compat \
-          -Wno-c++98-compat"
+          -Wno-c++98-compat -Wno-implicit-void-ptr-cast"
     for src in {{mains}}; do
         echo "=== $src ==="
         clang {{std}} -Weverything $supp -fsyntax-only "$src"
