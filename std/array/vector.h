@@ -28,34 +28,35 @@ typedef struct {
 #define vec_free(a)                                                            \
   do {                                                                         \
     if (a) {                                                                   \
-      free(gc_vec_header(a));                                                    \
+      free(gc_vec_header(a));                                                  \
       (a) = NULL;                                                              \
     }                                                                          \
   } while (0)
 
 #define vec_reserve(a, n)                                                      \
   do {                                                                         \
-    static_assert(_Alignof(typeof(*(a))) <= _Alignof(max_align_t),              \
+    static_assert(_Alignof(typeof(*(a))) <= _Alignof(max_align_t),             \
                   "vector element alignment exceeds max_align_t");             \
     size_t _old_len = vec_len(a);                                              \
     if ((n) > vec_cap(a)) {                                                    \
-      /* grow capacity up to at least n, but gc_vec_grow will also add to length \
+      /* grow capacity up to at least n, but gc_vec_grow will also add to      \
+       * length                                                                \
        */                                                                      \
-      gc_vec_grow((void **)&(a), (n) - _old_len, sizeof *(a));                   \
+      gc_vec_grow((void **)&(a), (n) - _old_len, sizeof *(a));                 \
       /* undo the accidental length bump */                                    \
-      gc_vec_header(a)->length = _old_len;                                       \
+      gc_vec_header(a)->length = _old_len;                                     \
     }                                                                          \
   } while (0)
 
 /*–– append one element ––*/
 #define vec_push(a, val)                                                       \
   do {                                                                         \
-    static_assert(_Alignof(typeof(*(a))) <= _Alignof(max_align_t),              \
+    static_assert(_Alignof(typeof(*(a))) <= _Alignof(max_align_t),             \
                   "vector element alignment exceeds max_align_t");             \
     /* remember old length */                                                  \
     size_t _old_len = vec_len(a);                                              \
     /* grow by exactly one slot (this bumps length by +1) */                   \
-    gc_vec_grow((void **)&(a), 1, sizeof *(a));                                  \
+    gc_vec_grow((void **)&(a), 1, sizeof *(a));                                \
     /* store into the newly-allocated slot */                                  \
     (a)[_old_len] = (val);                                                     \
   } while (0)
@@ -66,17 +67,17 @@ typedef struct {
 /*–– get the element at index `idx` (with bounds‐check) ––*/
 #define vec_get(a, idx)                                                        \
   ({                                                                           \
-    size_t gc_i = (idx);                                                        \
+    size_t gc_i = (idx);                                                       \
     /* must have been initialized and in‐bounds */                             \
-    assert((a) && gc_i < vec_len(a));                                           \
-    (a)[gc_i];                                                                  \
+    assert((a) && gc_i < vec_len(a));                                          \
+    (a)[gc_i];                                                                 \
   })
 
 /*–– set length to 0 (does not free memory) ––*/
 #define vec_clear(a)                                                           \
   do {                                                                         \
     if (a)                                                                     \
-      gc_vec_header(a)->length = 0;                                              \
+      gc_vec_header(a)->length = 0;                                            \
   } while (0)
 
 /*–– simple foreach ––*/
@@ -117,7 +118,7 @@ static inline void gc_vec_grow(void **arr, size_t increment, size_t elem_size) {
 
 #define vec_init(a, ...)                                                       \
   do {                                                                         \
-    static_assert(_Alignof(typeof(*(a))) <= _Alignof(max_align_t),              \
+    static_assert(_Alignof(typeof(*(a))) <= _Alignof(max_align_t),             \
                   "vector element alignment exceeds max_align_t");             \
     /* count from sizeof on the array literal itself (unevaluated, no decay);  \
        _vec_src decays to a pointer only for the memcpy source */              \

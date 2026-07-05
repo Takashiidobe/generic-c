@@ -27,7 +27,7 @@ int main(void) {
   size_t pairs = 0;
   map_for(map, key, value) {
     GC_ASSERT((key == 1 && strcmp(value.value, "hi") == 0) ||
-           (key == 3 && strcmp(value.value, "next") == 0));
+              (key == 3 && strcmp(value.value, "next") == 0));
     ++pairs;
   }
   GC_ASSERT(pairs == 2);
@@ -42,7 +42,7 @@ int main(void) {
   size_t values = 0;
   map_vals(map, value) {
     GC_ASSERT(strcmp(value.value, "hi") == 0 ||
-           strcmp(value.value, "next") == 0);
+              strcmp(value.value, "next") == 0);
     ++values;
   }
   GC_ASSERT(values == 2);

@@ -4,6 +4,7 @@
 #   just test-gcc   # same, with gcc
 #   just asan       # build + run under AddressSanitizer + UBSan
 #   just lint       # aggressive clang warnings (no -Werror)
+#   just fmt        # format every C source and header
 #   just clean
 
 cc     := env_var_or_default("CC", "clang")
@@ -12,8 +13,6 @@ std    := "-std=gnu2x"
 # strict warning set — kept -Werror-clean on both clang and gcc.
 # this codebase leans on GNU extensions (statement expressions, flexible
 # array members, typeof), so -Wpedantic/-Weverything live in `lint` instead.
-# -Wshadow is also in `lint` only: the iterator macros reuse loop-var names
-# (_i, __sh, ...) and legitimately shadow when loops nest.
 warn   := "-Wall -Wextra -Werror -Wundef -Wvla -Wpointer-arith " + \
           "-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings " + \
           "-Wredundant-decls -Wdate-time"
@@ -75,6 +74,14 @@ lint:
         echo "=== $src ==="
         clang {{std}} -Weverything $supp -fsyntax-only "$src"
     done
+
+# format every C source and header
+fmt:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    find std questions -type f \( -name '*.c' -o -name '*.h' \) -print0 \
+      | sort -z \
+      | xargs -0 clang-format -i
 
 clean:
     rm -rf {{out}}

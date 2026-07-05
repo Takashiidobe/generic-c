@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-[[noreturn]] static inline void
-gc_assert_fail(const char *expression, const char *file, int line) {
+[[noreturn]] static inline void gc_assert_fail(const char *expression,
+                                               const char *file, int line) {
   fprintf(stderr, "%s:%d: assertion failed: %s\n", file, line, expression);
   abort();
 }

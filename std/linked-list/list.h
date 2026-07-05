@@ -27,7 +27,7 @@ typedef struct ListNode {
 
 // ─── allocate and insert at front ───────────────────────────────────────
 static inline void *gc_list_alloc_front(ListNode **head, ListNode **tail,
-                                      size_t data_size) {
+                                        size_t data_size) {
   ListNode *node = malloc(sizeof *node + data_size);
   assert(node);
   node->prev = NULL;
@@ -42,7 +42,7 @@ static inline void *gc_list_alloc_front(ListNode **head, ListNode **tail,
 
 // ─── allocate and insert at back ────────────────────────────────────────
 static inline void *gc_list_alloc_back(ListNode **head, ListNode **tail,
-                                     size_t data_size) {
+                                       size_t data_size) {
   ListNode *node = malloc(sizeof *node + data_size);
   assert(node);
   node->next = NULL;
@@ -72,19 +72,19 @@ static inline void *gc_list_alloc_back(ListNode **head, ListNode **tail,
 // ─── allocate in-place at front ─────────────────────────────────────────
 #define list_alloc_front(lst)                                                  \
   ({                                                                           \
-    static_assert(_Alignof(typeof(*(lst)->payload)) <= _Alignof(max_align_t),   \
+    static_assert(_Alignof(typeof(*(lst)->payload)) <= _Alignof(max_align_t),  \
                   "list element alignment exceeds max_align_t");               \
-    (__typeof__((lst)->payload))gc_list_alloc_front(                            \
-        &((lst)->head), &((lst)->tail), sizeof *(lst)->payload);                \
+    (__typeof__((lst)->payload))gc_list_alloc_front(                           \
+        &((lst)->head), &((lst)->tail), sizeof *(lst)->payload);               \
   })
 
 // ─── allocate in-place at back ──────────────────────────────────────────
 #define list_alloc_back(lst)                                                   \
   ({                                                                           \
-    static_assert(_Alignof(typeof(*(lst)->payload)) <= _Alignof(max_align_t),   \
+    static_assert(_Alignof(typeof(*(lst)->payload)) <= _Alignof(max_align_t),  \
                   "list element alignment exceeds max_align_t");               \
-    (__typeof__((lst)->payload))gc_list_alloc_back(                             \
-        &((lst)->head), &((lst)->tail), sizeof *(lst)->payload);                \
+    (__typeof__((lst)->payload))gc_list_alloc_back(                            \
+        &((lst)->head), &((lst)->tail), sizeof *(lst)->payload);               \
   })
 
 // ─── pop from front (returns T) ──────────────────────────────────────────
@@ -133,8 +133,8 @@ static inline void *gc_list_alloc_back(ListNode **head, ListNode **tail,
                         : NULL);                                               \
        it != NULL;                                                             \
        it = (__extension__({                                                   \
-         ListNode *_n =                                                       \
-             (ListNode *)(void *)((char *)it - offsetof(ListNode, data));     \
+         ListNode *_n =                                                        \
+             (ListNode *)(void *)((char *)it - offsetof(ListNode, data));      \
          _n->next ? (__typeof__((lst)->payload))_n->next->data : NULL;         \
        })))
 
@@ -145,8 +145,8 @@ static inline void *gc_list_alloc_back(ListNode **head, ListNode **tail,
                         : NULL);                                               \
        it != NULL;                                                             \
        it = (__extension__({                                                   \
-         ListNode *_n =                                                       \
-             (ListNode *)(void *)((char *)it - offsetof(ListNode, data));     \
+         ListNode *_n =                                                        \
+             (ListNode *)(void *)((char *)it - offsetof(ListNode, data));      \
          _n->prev ? (__typeof__((lst)->payload))_n->prev->data : NULL;         \
        })))
 
